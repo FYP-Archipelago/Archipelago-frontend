@@ -1,0 +1,7 @@
+# Frontend-only. Nothing here depends on the dEA harness or the clustering
+# pipeline: the schema 2.0 log format is the sole coupling point.
+
+streamlit>=1.40      # the app shell
+plotly>=6.0          # 3D scatter and every 2D chart
+pandas>=2.0          # the evaluation table
+numpy>=2.0           # projection maths (PCA via SVD)
