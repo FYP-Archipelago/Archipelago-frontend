@@ -1,0 +1,16 @@
+# Dark ground with a single teal accent. Streamlit's default chrome is what
+# reads as unpolished, not the charts -- this plus theme.CSS fixes it.
+
+[theme]
+base = "dark"
+primaryColor = "#4FBFB3"
+backgroundColor = "#08171F"
+secondaryBackgroundColor = "#0E2530"
+textColor = "#DDE8E9"
+font = "sans serif"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false

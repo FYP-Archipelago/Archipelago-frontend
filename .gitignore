@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.streamlit/secrets.toml
+.DS_Store
+
+# Local runs. The two sample runs under data/ are committed on purpose.
+runs/
+
+# Editor / tooling
+.vscode/
+.idea/
