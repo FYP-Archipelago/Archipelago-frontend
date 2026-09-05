@@ -1,0 +1,305 @@
+{
+  "run_id": "run-20260903T230838Z-4891f68f",
+  "output_dir": "runs\\run-20260903T230838Z-4891f68f",
+  "aggregate_log": "runs\\run-20260903T230838Z-4891f68f\\run.jsonl",
+  "evaluations_csv": "runs\\run-20260903T230838Z-4891f68f\\evaluations.csv",
+  "termination_reason": "completed",
+  "wallclock_seconds": 2.139999999999418,
+  "islands_completed": 4,
+  "islands_failed": 0,
+  "total_evaluations": 1786,
+  "total_migration_events": 22,
+  "total_migrants": 44,
+  "global_best_fitness": 65.08873571431988,
+  "global_best_island": 2,
+  "per_island": {
+    "0": {
+      "connected": false,
+      "ready": true,
+      "finished": true,
+      "faulted": false,
+      "generation": 12,
+      "evaluations": 314,
+      "best_fitness": 83.06011964580935,
+      "node_id": "IM-JUST-A-COMPUTER:24372",
+      "clock_offset_ns": 0,
+      "migrations_dispatched": 4,
+      "migrations_delivered": 1,
+      "migrants_dropped": 0,
+      "termination_reason": "stagnation",
+      "best_genome_hash": "aa12d4c52d9ee42c338287f287a6214f",
+      "migrations_sent": 4,
+      "migrations_received": 1,
+      "generations_since_improvement": 10,
+      "error": null,
+      "algorithm_summary": {}
+    },
+    "1": {
+      "connected": false,
+      "ready": true,
+      "finished": true,
+      "faulted": false,
+      "generation": 19,
+      "evaluations": 488,
+      "best_fitness": 85.54949468721891,
+      "node_id": "IM-JUST-A-COMPUTER:7336",
+      "clock_offset_ns": 0,
+      "migrations_dispatched": 6,
+      "migrations_delivered": 4,
+      "migrants_dropped": 0,
+      "termination_reason": "stagnation",
+      "best_genome_hash": "bb4ed121a1c00a6be69fa2d955238f95",
+      "migrations_sent": 6,
+      "migrations_received": 4,
+      "generations_since_improvement": 10,
+      "error": null,
+      "algorithm_summary": {}
+    },
+    "2": {
+      "connected": false,
+      "ready": true,
+      "finished": true,
+      "faulted": false,
+      "generation": 19,
+      "evaluations": 492,
+      "best_fitness": 65.08873571431988,
+      "node_id": "IM-JUST-A-COMPUTER:18756",
+      "clock_offset_ns": 0,
+      "migrations_dispatched": 6,
+      "migrations_delivered": 6,
+      "migrants_dropped": 0,
+      "termination_reason": "max_evaluations",
+      "best_genome_hash": "0f831f8f02451c3b6537bb37dd219796",
+      "migrations_sent": 6,
+      "migrations_received": 6,
+      "generations_since_improvement": 2,
+      "error": null,
+      "algorithm_summary": {}
+    },
+    "3": {
+      "connected": false,
+      "ready": true,
+      "finished": true,
+      "faulted": false,
+      "generation": 19,
+      "evaluations": 492,
+      "best_fitness": 65.08873571431988,
+      "node_id": "IM-JUST-A-COMPUTER:20888",
+      "clock_offset_ns": 0,
+      "migrations_dispatched": 6,
+      "migrations_delivered": 6,
+      "migrants_dropped": 0,
+      "termination_reason": "max_evaluations",
+      "best_genome_hash": "0f831f8f02451c3b6537bb37dd219796",
+      "migrations_sent": 6,
+      "migrations_received": 6,
+      "generations_since_improvement": 7,
+      "error": null,
+      "algorithm_summary": {}
+    }
+  },
+  "island_results": [
+    {
+      "island_id": 0,
+      "termination_reason": "stagnation",
+      "generations_completed": 12,
+      "evaluations_total": 314,
+      "best_fitness": 83.06011964580935,
+      "best_genome_hash": "aa12d4c52d9ee42c338287f287a6214f",
+      "best_individual_id": "i00-g000012-n000000312",
+      "best_genome": [
+        -0.04519899920756343,
+        1.362259757849636,
+        1.9571182630704826,
+        -0.8773773427052325,
+        0.8725285711110522,
+        -1.2380674796226798,
+        2.7337573896104175,
+        -1.0861112290971315,
+        1.2531307121316075,
+        2.959374910872418
+      ],
+      "migrations_sent": 4,
+      "migrations_received": 1,
+      "migrants_sent": 8,
+      "migrants_received": 2,
+      "wallclock_seconds": 0.046000000000276486,
+      "generations_since_improvement": 10,
+      "algorithm_summary": {},
+      "control_channel": {
+        "control_available": true,
+        "failed_control_calls": 0,
+        "last_control_error": null,
+        "sink_stats": {
+          "JsonlFileSink#0": {
+            "written": 20,
+            "dropped": 0,
+            "errors": 0,
+            "degraded": false,
+            "last_error": null
+          },
+          "NetworkSink#1": {
+            "written": 20,
+            "dropped": 0,
+            "errors": 0,
+            "degraded": false,
+            "last_error": null
+          }
+        }
+      },
+      "error": null
+    },
+    {
+      "island_id": 1,
+      "termination_reason": "stagnation",
+      "generations_completed": 19,
+      "evaluations_total": 488,
+      "best_fitness": 85.54949468721891,
+      "best_genome_hash": "bb4ed121a1c00a6be69fa2d955238f95",
+      "best_individual_id": "i01-g000009-n000000230",
+      "best_genome": [
+        -2.009214725824604,
+        0.8956065501234174,
+        -0.1822269654268318,
+        -2.125760464283544,
+        1.6946877056750447,
+        -0.10350813682448934,
+        -1.360044145740671,
+        -1.063242667519892,
+        -2.1261043404469087,
+        -2.314032343062908
+      ],
+      "migrations_sent": 6,
+      "migrations_received": 4,
+      "migrants_sent": 12,
+      "migrants_received": 8,
+      "wallclock_seconds": 0.07800000000042928,
+      "generations_since_improvement": 10,
+      "algorithm_summary": {},
+      "control_channel": {
+        "control_available": true,
+        "failed_control_calls": 0,
+        "last_control_error": null,
+        "sink_stats": {
+          "JsonlFileSink#0": {
+            "written": 32,
+            "dropped": 0,
+            "errors": 0,
+            "degraded": false,
+            "last_error": null
+          },
+          "NetworkSink#1": {
+            "written": 32,
+            "dropped": 0,
+            "errors": 0,
+            "degraded": false,
+            "last_error": null
+          }
+        }
+      },
+      "error": null
+    },
+    {
+      "island_id": 2,
+      "termination_reason": "max_evaluations",
+      "generations_completed": 19,
+      "evaluations_total": 492,
+      "best_fitness": 65.08873571431988,
+      "best_genome_hash": "0f831f8f02451c3b6537bb37dd219796",
+      "best_individual_id": "i02-g000017-n000000439",
+      "best_genome": [
+        1.4548214683101766,
+        0.9528173906061081,
+        2.208041041022967,
+        -0.8988648585346398,
+        -0.18397988758821665,
+        0.14958346037650871,
+        1.8523145262308989,
+        2.072676625910222,
+        0.02478975226065938,
+        1.98161430157302
+      ],
+      "migrations_sent": 6,
+      "migrations_received": 6,
+      "migrants_sent": 12,
+      "migrants_received": 12,
+      "wallclock_seconds": 0.07800000000042928,
+      "generations_since_improvement": 2,
+      "algorithm_summary": {},
+      "control_channel": {
+        "control_available": true,
+        "failed_control_calls": 0,
+        "last_control_error": null,
+        "sink_stats": {
+          "JsonlFileSink#0": {
+            "written": 33,
+            "dropped": 0,
+            "errors": 0,
+            "degraded": false,
+            "last_error": null
+          },
+          "NetworkSink#1": {
+            "written": 33,
+            "dropped": 0,
+            "errors": 0,
+            "degraded": false,
+            "last_error": null
+          }
+        }
+      },
+      "error": null
+    },
+    {
+      "island_id": 3,
+      "termination_reason": "max_evaluations",
+      "generations_completed": 19,
+      "evaluations_total": 492,
+      "best_fitness": 65.08873571431988,
+      "best_genome_hash": "0f831f8f02451c3b6537bb37dd219796",
+      "best_individual_id": "i03-g000011-n000000298",
+      "best_genome": [
+        1.4548214683101766,
+        0.9528173906061081,
+        2.208041041022967,
+        -0.8988648585346398,
+        -0.18397988758821665,
+        0.14958346037650871,
+        1.8523145262308989,
+        2.072676625910222,
+        0.02478975226065938,
+        1.98161430157302
+      ],
+      "migrations_sent": 6,
+      "migrations_received": 6,
+      "migrants_sent": 12,
+      "migrants_received": 12,
+      "wallclock_seconds": 0.10900000000037835,
+      "generations_since_improvement": 7,
+      "algorithm_summary": {},
+      "control_channel": {
+        "control_available": true,
+        "failed_control_calls": 0,
+        "last_control_error": null,
+        "sink_stats": {
+          "JsonlFileSink#0": {
+            "written": 33,
+            "dropped": 0,
+            "errors": 0,
+            "degraded": false,
+            "last_error": null
+          },
+          "NetworkSink#1": {
+            "written": 33,
+            "dropped": 0,
+            "errors": 0,
+            "degraded": false,
+            "last_error": null
+          }
+        }
+      },
+      "error": null
+    }
+  ],
+  "schema_version": "2.0",
+  "harness_version": "0.2.0"
+}

@@ -1,0 +1,77 @@
+run_id: null
+description: 'Smoke test: 4 islands of DE on Rastrigin, ring migration.'
+algorithm: de
+algorithm_params:
+  strategy: rand/1
+  f: 0.5
+  cr: 0.9
+benchmark: rastrigin
+benchmark_params:
+  dimension: 10
+evaluation_budget: 2000
+population_size: null
+target_generations: 20
+num_islands: 4
+strict_island_range: false
+termination:
+  stagnation_generations: 10
+  stagnation_tolerance: 1.0e-10
+  max_generations: 200
+  target_fitness: null
+  time_limit_seconds: null
+migration:
+  enabled: true
+  topology: ring
+  topology_params: {}
+  interval: 3
+  num_migrants: 2
+  selection: best
+  replacement: worst
+  selection_params: {}
+  replacement_params: {}
+  fanout: all
+  copy_migrants: true
+  phase_jitter: 0
+  poll_every_generation: true
+  max_pending_per_island: 1000
+logging:
+  output_dir: runs
+  run_subdir: null
+  genome_mode: compact
+  genome_precision_decimals: 4
+  genome_sample_every: 1
+  log_evaluations: true
+  validate_events: true
+  compress: false
+  write_island_shards: true
+  stream_to_master: true
+  flush_interval_seconds: 2.0
+  network_queue_size: 100000
+execution:
+  backend: local
+  control_host: 127.0.0.1
+  control_port: 0
+  advertise_host: null
+  heartbeat_interval_seconds: 2.0
+  fault_timeout_seconds: 60.0
+  startup_timeout_seconds: 180.0
+  shutdown_grace_seconds: 20.0
+  worker_python: null
+docker:
+  image: archipelago-worker:latest
+  build: true
+  dockerfile: docker/Dockerfile.worker
+  build_context: .
+  build_network: null
+  cpus: 1.0
+  memory: 2g
+  network_mode: bridge
+  auto_remove: true
+  environment: {}
+  labels:
+    app: archipelago
+    component: island-worker
+  mount_output_dir: true
+_meta:
+  schema_version: '2.0'
+  harness_version: 0.2.0

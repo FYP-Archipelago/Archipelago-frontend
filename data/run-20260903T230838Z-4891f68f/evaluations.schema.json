@@ -1,0 +1,37 @@
+{
+  "schema_version": "2.0",
+  "record_type": "evaluation",
+  "columns": [
+    "run_id",
+    "island_id",
+    "seq",
+    "eval_index",
+    "generation",
+    "t_wall",
+    "t_mono_ns",
+    "individual_id",
+    "parent_ids",
+    "operator",
+    "fitness",
+    "objective",
+    "feasible",
+    "constraint_violation",
+    "is_island_best",
+    "genome_encoding",
+    "genome_hash",
+    "genome_repr",
+    "genome_repr_mode",
+    "genome_precision_decimals",
+    "genome_dim",
+    "origin_island",
+    "origin_individual_id"
+  ],
+  "conventions": {
+    "null": "empty field",
+    "boolean": "1 for true, 0 for false, empty for unknown",
+    "parent_ids": "';'-separated list; empty for an initial individual",
+    "genome_repr": "interpretation depends on genome_repr_mode: absent for 'hashed', a base64 string for 'compact' (see archipelago_logging.decode_compact), JSON for 'full'. Composite encodings (real_vector_velocity, real_vector_sigma) are JSON objects in both non-hashed modes.",
+    "quoting": "RFC 4180 (csv.QUOTE_MINIMAL); read with Python's csv module or pandas"
+  },
+  "note": "Every other event type for this run is in run.jsonl. Join on run_id, island_id and generation."
+}
