@@ -3,6 +3,22 @@
 The frontend was built so the cascade is an addition, not a rewrite. This is
 the whole of what you have to touch.
 
+> **Already done, as of v0.3.** `archipelago_cluster_client/` is the worked
+> example of everything below. It gets its labels from `archipelago-api` over
+> HTTP rather than computing them locally, which changes nothing here — a reducer
+> is a function that produces labels, and where they come from is its own
+> business.
+>
+> It does *not* register one level per algorithm. Running the pipeline is a
+> deliberate act that belongs where a run is submitted, so the stage toggles live
+> on the **Runs** page and each execution is stored. The client `unregister`s the
+> `lsh` / `birch` / `denstream` placeholders and registers a single **Clustered**
+> level whose controls pick between stored results. Which stages ran is a
+> property of a result, not of a level.
+>
+> Read it alongside this document; the rest of this file still describes the
+> contract, not history.
+
 ## The contract
 
 Every view in the app draws an `STN` — nodes, edges, migration edges. Level 0 is
@@ -39,7 +55,7 @@ def build_birch(stn, run, params):
         {"clusters": len(set(labels)), "threshold": params["threshold"]},
     )
 
-def birch_controls():
+def birch_controls(run):          # receives the run currently on screen
     import streamlit as st
     return {"threshold": st.slider("CF-tree threshold", 0.01, 1.0, 0.15)}
 
@@ -54,8 +70,21 @@ levels.register(levels.Level(
 ))
 ```
 
+`levels.unregister(key)` removes one, for a client that covers the placeholders
+some other way.
+
+Page content outside the level system has its own seam: `archipelago_ui/extensions.py`
+registers panels into named slots, which is how the clustering controls reach the
+Runs page without `pages/library.py` importing the API client.
+
 Then import your module once at startup (one line in `app.py`) so the
-registration runs.
+registration runs. `app.py` has exactly that line for the shipped client:
+
+```python
+import archipelago_cluster_client  # noqa: F401 -- registers the clustering levels
+```
+
+Delete it and the app is Level 0 again, with the placeholders back.
 
 `labels` is one group id per row of `stn.nodes`, in row order. Anything hashable
 works — ints, strings, tuples.
@@ -94,7 +123,11 @@ other way, return your own `STN` — nothing requires it.
 - A diagnostics table — whatever dict you put in `Reduction.diagnostics` is
   rendered under the plot, so silhouette scores, tree depth and decay parameters
   have somewhere to go
-- Per-level controls, if you supply a `controls` callable
+- Per-level controls, if you supply a `controls` callable. It is called as
+  `controls(run)` above the plot, and whatever it returns reaches your `build` as
+  `params` — so a level's own switches sit beside the view they change rather
+  than in the sidebar, and a level offering per-run choices knows which run it is
+  choosing for
 
 ## Checking it works
 

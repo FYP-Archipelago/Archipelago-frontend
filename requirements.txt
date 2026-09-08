@@ -5,3 +5,4 @@ streamlit>=1.40      # the app shell
 plotly>=6.0          # 3D scatter and every 2D chart
 pandas>=2.0          # the evaluation table
 numpy>=2.0           # projection maths (PCA via SVD)
+requests>=2.31       # the clustering API client; nothing else calls out

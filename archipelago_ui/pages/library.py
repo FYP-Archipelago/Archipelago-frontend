@@ -11,7 +11,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from .. import ingest
+from .. import extensions, ingest
 from ..data import DATA_ROOT, caption, invalidate, page_header
 
 
@@ -241,6 +241,13 @@ def render() -> None:
         "this table stays fast however large the library gets."
     )
     _remove(paths)
+
+    # Anything registered into the "library" slot draws here -- the clustering
+    # controls, when that client is installed. Empty, and nothing is drawn, so
+    # the page is unchanged without it. See archipelago_ui/extensions.py.
+    if extensions.has("library"):
+        st.markdown("---")
+        extensions.render("library", paths)
 
     st.markdown("---")
     with st.expander("Where runs come from"):

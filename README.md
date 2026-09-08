@@ -6,10 +6,14 @@ distributed evolutionary algorithm runs produced by
 
 Team 21, Dept. of CSE, Amrita Vishwa Vidyapeetham. Guide: Dr. Ritwik M.
 
-> **Status: v0.2 — Level 0.** This build draws the trajectory network with **no
-> clustering applied**. The LSH → BIRCH → DenStream cascade and the MMD analytics
-> are separate work; the *seam* they plug into exists and is documented in
-> [docs/EXTENDING.md](docs/EXTENDING.md), but no reducer is implemented.
+> **Status: v0.3 — clustering connected.** The LSH → BIRCH → DenStream cascade
+> now runs, over REST, against the `dEA-clustering` pipeline. Bring a run in on
+> the **Runs** page, toggle which stages should execute, and press **Run
+> clustering** — any one, any two, or all three. Every execution is kept, and the
+> **Archipelago** page picks which result to draw; it never runs the pipeline
+> itself. MMD analytics are still separate work. The seam is unchanged
+> and still documented in [docs/EXTENDING.md](docs/EXTENDING.md) — the cascade
+> plugs into it rather than replacing it, which is why no view changed.
 
 ---
 
@@ -25,7 +29,7 @@ the run's log and draws what each island actually did.
 | **Migration** | `migration_send` ⋈ `migration_arrive` | Every transfer: route, latency, drift, delivery |
 | **Convergence** | `generation_end` | Per-island progress and diversity on wall-clock time |
 | **Run browser** | `run_start`, `island_end`, `run_end` | Provenance, budget, how and why each island stopped |
-| **Runs** | the library | Add a run, see what is loaded, remove one |
+| **Runs** | the library | Add a run, see what is loaded, remove one, **and run the clustering pipeline on it** |
 | **Overview** | — | What a dEA is, what an STN is, why a fitness curve isn't enough |
 
 ## Where this sits
@@ -66,6 +70,17 @@ simultaneous, so charts use clock-corrected `t_wall` throughout.
 pip install -r requirements.txt
 streamlit run app.py
 ```
+
+That is enough for Level 0. For the clustering levels, start the API service
+beside it — it is what actually runs the pipeline:
+
+```bash
+cd ../archipelago-api && ./.venv/bin/python -m uvicorn app.main:app --port 8000
+```
+
+The app finds it at `http://127.0.0.1:8000`, or wherever `ARCHIPELAGO_API_URL`
+points, or whatever you type into the *Clustering service* box on the
+Archipelago page. Without it the clustering levels say so and draw Level 0.
 
 Two sample runs ship in `data/`, so it works with no setup. Both are real output
 from the baseline harness — DE on Rastrigin, one with ring migration every 3

@@ -9,10 +9,61 @@ so the progression is real and the differences between folders are the actual
 changes. `CHANGELOG.md` at the repo root says what changed and why; this says
 what it looked like.
 
-Captured at 1680×1050, full page, on the `de / rastrigin · 5 islands`
+Captured 1680 wide, full page, on the `de / rastrigin · 5 islands`
 fully-connected sample run.
 
+From v0.3 the capture height follows the page. Streamlit scrolls an inner
+element, not the document, so Playwright's `full_page` stopped at the 1050px
+viewport and quietly cut everything below the fold — the v0.1 and v0.2 folders
+are all clipped at that height for this reason. The script now measures the app's
+own scroll container and grows the viewport to match before shooting.
+
 ---
+
+## v0.3 — the cascade, connected
+
+Seven shots for six pages: **01b** is the Archipelago page a second time, with
+the clustering cascade applied, because the difference between it and **01** is
+what this version *is*.
+
+| | Page | |
+|---|---|---|
+| 01 | Archipelago · Level 0 | [01-archipelago.png](v0.3/01-archipelago.png) |
+| 01b | Archipelago · **Level 4, all three stages** *(new)* | [01b-archipelago-clustered.png](v0.3/01b-archipelago-clustered.png) |
+| 02 | Migration | [02-migration.png](v0.3/02-migration.png) |
+| 03 | Convergence | [03-convergence.png](v0.3/03-convergence.png) |
+| 04 | Run browser | [04-run-browser.png](v0.3/04-run-browser.png) |
+| 05 | Runs · **now runs the pipeline** | [05-runs.png](v0.3/05-runs.png) |
+| 06 | Overview | [06-overview.png](v0.3/06-overview.png) |
+
+What to look at:
+
+- **05-runs, lower half** — *Run the clustering pipeline*. Choose the run, toggle
+  which of LSH / BIRCH / DenStream execute, tune them, and press the button. That
+  button is the REST call; the pipeline runs in a separate service, named in the
+  strip above the picker. This is where clustering is *asked for* — 01b is where
+  the answer is looked at.
+- **01 against 01b** — the same run, the same view, 3,294 nodes against 842.
+  The tile reads *3.9x compression*, and the plot goes from a dense smear to
+  islands with visible internal structure. Nothing about the view was rewritten
+  to draw the second one: the reducer returns an `STN` and every view already
+  took one.
+- **01b, the stage row** — LSH, Birch and Denstream on individual toggles, with
+  `Order: lsh → birch → denstream` beside them. Membership is the user's choice;
+  the sequence is not, because each stage refines the partition the previous one
+  produced.
+- **01b, the sidebar** — Levels 1–3 have lost their *not built yet* suffix, and
+  Level 4 is new. Level 4 is the only one from which two-stage combinations are
+  reachable.
+- **01b, the service strip** — where the clustering ran. The pipeline is a
+  separate process behind a REST API, and the app says so rather than pretending
+  the work is local.
+
+> **A note on 01 in v0.2.** That file has a *Page not found* modal across it. The
+> capture script requested the Archipelago page by its declared `url_path`, but
+> Streamlit serves the default page at the root, so the request 404'd and the
+> modal landed in the shot. Fixed in the script for v0.3; the v0.2 folder is left
+> exactly as captured, per the rule above.
 
 ## v0.2 — run library, cascade seam, visual pass
 
@@ -68,7 +119,15 @@ What to look at:
 With the app running:
 
 ```bash
-python scripts/capture_screenshots.py --version v0.3
+python scripts/capture_screenshots.py --version v0.4
+```
+
+The clustered shot needs the API service up as well; without it that one shot is
+skipped with a notice and the other six still capture. A screenshot of an error
+message is not a record of what a version looked like.
+
+```bash
+cd ../archipelago-api && ./.venv/bin/python -m uvicorn app.main:app --port 8000
 ```
 
 It writes one full-page PNG per page into `docs/version-history/v0.3/`. The page

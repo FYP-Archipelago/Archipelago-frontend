@@ -17,7 +17,7 @@ from ..data import caption, page_header
 _STAGES = [
     ("Execution", "islands evolve in parallel and swap individuals", "external"),
     ("Logs", "every evaluation and migration, one schema", "external"),
-    ("Clustering", "LSH → BIRCH → DenStream compress the stream", "planned"),
+    ("Clustering", "LSH → BIRCH → DenStream compress the stream", "external"),
     ("Network", "trajectories become a graph, with migration edges", "built"),
     ("Analytics", "MMD compares what each island explored", "planned"),
 ]

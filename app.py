@@ -8,12 +8,17 @@ Reads runs written by FYP-Archipelago/baseline-dEA in the schema 2.0 layout. It
 imports nothing from the harness and nothing from the clustering pipeline: the
 log format is the only coupling point, which is the same rule the harness itself
 follows. Runs are produced elsewhere — locally, or on Volpe — and read here.
+
+The clustering cascade arrives the way ``docs/EXTENDING.md`` says it should: as a
+package that registers levels inward. The import below is the whole of it. Drop
+that line and the app is exactly what it was before — Level 0 and nothing else.
 """
 
 from __future__ import annotations
 
 import streamlit as st
 
+import archipelago_cluster_client  # noqa: F401 -- registers the clustering levels
 from archipelago_ui import theme
 from archipelago_ui.data import VERSION, run_selector, sidebar_footer
 from archipelago_ui.pages import (

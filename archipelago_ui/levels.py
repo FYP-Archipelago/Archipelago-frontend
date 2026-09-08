@@ -75,8 +75,11 @@ class Reduction:
 #: A level's reduction step. Takes the Level 0 network and returns a coarser one.
 Builder = Callable[[STN, Run, Mapping[str, Any]], Reduction]
 
-#: Optional per-level Streamlit controls. Returns the params dict for ``Builder``.
-Controls = Callable[[], Mapping[str, Any]]
+#: Optional per-level Streamlit controls, drawn on the page above the plot.
+#: Receives the current run -- a level whose controls offer per-run choices needs
+#: to know which run it is choosing for -- and returns the params dict passed to
+#: ``Builder``.
+Controls = Callable[[Run], Mapping[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -103,6 +106,17 @@ _REGISTRY: dict[str, Level] = {}
 def register(level: Level) -> None:
     """Add or replace a level. Re-registering a key overrides it."""
     _REGISTRY[level.key] = level
+
+
+def unregister(key: str) -> None:
+    """Remove a level. Unknown keys are ignored.
+
+    The placeholders below describe levels this app might grow. A reducer that
+    arrives and covers them differently -- offering finished results to pick from
+    rather than a level per algorithm -- should be able to take them out of the
+    picker, instead of leaving entries that promise a choice it does not offer.
+    """
+    _REGISTRY.pop(key, None)
 
 
 def get(key: str) -> Level:
