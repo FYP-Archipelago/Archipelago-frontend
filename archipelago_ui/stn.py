@@ -34,6 +34,9 @@ class STN:
     nodes: pd.DataFrame
     edges: pd.DataFrame
     migrations: pd.DataFrame
+    #: Migration *events* before identical routes are merged. ``migrations`` holds
+    #: one row per distinct node pair, so this is always >= len(migrations).
+    transfer_events: int = 0
 
     @property
     def n_nodes(self) -> int:
@@ -41,7 +44,12 @@ class STN:
 
     @property
     def n_edges(self) -> int:
+        """Within-island trajectory edges. Crossings live in ``migrations``."""
         return len(self.edges)
+
+    @property
+    def n_crossings(self) -> int:
+        return len(self.migrations)
 
 
 def _node_key(island, genome_hash) -> str:
@@ -118,6 +126,19 @@ def build_stn(run: Run, islands: list[int] | None = None) -> STN:
             .size()
             .rename(columns={"size": "weight"})
         )
+        # An edge whose endpoints sit on different islands is a migration, not a
+        # step this island took by itself: the child is an arrived copy and its
+        # only parent is on the source island. Those belong to the migration
+        # layer, so that switching migration off really does leave the islands
+        # unconnected -- otherwise the trajectory toggle silently keeps drawing
+        # lines between them.
+        #
+        # Classified by comparing the endpoints' island, not by the operator
+        # name: operator strings are algorithm-specific (de_trial, pso_update,
+        # ...) while the island comparison holds for every algorithm.
+        island_of = nodes["island_id"].to_dict()
+        crossing = edges["source"].map(island_of) != edges["target"].map(island_of)
+        edges = edges[~crossing].reset_index(drop=True)
 
     # ---- migration edges -------------------------------------------------
     migration_rows: list[dict] = []
@@ -140,7 +161,16 @@ def build_stn(run: Run, islands: list[int] | None = None) -> STN:
                 )
 
     migrations = pd.DataFrame(migration_rows)
-    return STN(nodes, edges, migrations)
+    transfer_events = len(migrations)
+    if not migrations.empty:
+        # Several transfers can carry the same genome along the same island pair,
+        # which draws the identical line over and over. One row per route, with
+        # the event count kept as weight.
+        migrations = migrations.groupby(
+            ["source", "target", "source_island", "dest_island"], as_index=False
+        ).agg(transfers=("migration_id", "size"), accepted=("accepted", "any"))
+
+    return STN(nodes, edges, migrations, transfer_events)
 
 
 def coordinate_matrix(nodes: pd.DataFrame) -> np.ndarray:

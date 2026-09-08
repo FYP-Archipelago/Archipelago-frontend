@@ -204,6 +204,7 @@ def collapse(stn: STN, labels: Sequence[Any]) -> STN:
         nodes=reduced,
         edges=_remap_edges(stn.edges, remap, drop_self_loops=True),
         migrations=_remap_edges(stn.migrations, remap, drop_self_loops=False),
+        transfer_events=stn.transfer_events,
     )
 
 

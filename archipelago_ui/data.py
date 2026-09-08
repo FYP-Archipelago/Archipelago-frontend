@@ -17,7 +17,7 @@ from .stn import STN, build_stn
 #: Where runs live. Anything with the schema 2.0 layout works.
 DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 
-VERSION = "v0.3"
+VERSION = "v0.4"
 
 #: Sidebar key for the selected abstraction level.
 LEVEL_STATE = "abstraction_level"

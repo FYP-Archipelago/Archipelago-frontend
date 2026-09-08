@@ -101,9 +101,9 @@ def _figure(stn, coords, options, run: Run) -> go.Figure:
                 go.Scatter3d(
                     x=xs, y=ys, z=zs,
                     mode="lines",
-                    line=dict(color=theme.MIGRATION_SOFT, width=1.6),
+                    line=dict(color=theme.MIGRATION_SOFT, width=1.8),
                     hoverinfo="skip",
-                    name=f"migration edge ({len(stn.migrations)})",
+                    name=f"migration route ({len(stn.migrations)})",
                 )
             )
 
@@ -201,9 +201,9 @@ def render(run: Run) -> None:
     page_header(
         "The search",
         "Archipelago",
-        "Every location the run actually visited. Each island keeps its own territory, and "
-        "height is fitness — so convergence reads as descent and a stalled island reads as one "
-        "that never gets down.",
+        "Every location the run actually visited, with height standing for fitness — so "
+        "convergence reads as descent and a stalled island reads as one that never gets down. "
+        "Trajectory edges are within-island; anything crossing between islands is a migration.",
     )
 
     options = _controls(run)
@@ -243,15 +243,21 @@ def render(run: Run) -> None:
 
     metrics = st.columns(5)
     metrics[0].metric("Nodes", f"{stn.n_nodes:,}")
-    metrics[1].metric("Trajectory edges", f"{stn.n_edges:,}")
+    metrics[1].metric(
+        "Trajectory edges",
+        f"{stn.n_edges:,}",
+        help="Within-island steps only. A parent on another island is a migration, "
+             "and is counted in the next tile instead.",
+    )
     hidden = _degenerate_migrations(stn, projection.frame)
     metrics[2].metric(
-        "Migration edges",
-        f"{len(stn.migrations):,}",
+        "Migration routes",
+        f"{stn.n_crossings:,}",
         delta=f"-{hidden:,} not drawable" if hidden else None,
         delta_color="off",
-        help="A migration links two islands at the same genome, so the edge only "
-             "has length once the islands are pulled apart.",
+        help=f"Distinct island-to-island links, carrying {stn.transfer_events:,} transfers. "
+             "A migration links two islands at the same genome, so the edge only has "
+             "length once the islands are pulled apart.",
     )
     metrics[3].metric("Shared locations", f"{int(stn.nodes['shared'].sum()):,}",
                       help="Visited by more than one island.")
@@ -298,6 +304,6 @@ def render(run: Run) -> None:
 
     caption(
         f"<b>{level.label}</b>. Node size is visit count, gold diamonds are island "
-        f"bests, magenta is a migration. Vertical axis: <code>{projection.vertical}</code>. "
+        f"bests, magenta is a migration route. Vertical axis: <code>{projection.vertical}</code>. "
         f"Drag to orbit, scroll to zoom."
     )

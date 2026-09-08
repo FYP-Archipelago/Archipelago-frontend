@@ -20,21 +20,44 @@ own scroll container and grows the viewport to match before shooting.
 
 ---
 
+## v0.4 — honest edges
+
+Six pages. No new pages since v0.3 — this round is correctness in the 3D view.
+
+| | Page | |
+|---|---|---|
+| 01 | Archipelago | [01-archipelago.png](v0.4/01-archipelago.png) |
+| 02 | Migration | [02-migration.png](v0.4/02-migration.png) |
+| 03 | Convergence | [03-convergence.png](v0.4/03-convergence.png) |
+| 04 | Run browser | [04-run-browser.png](v0.4/04-run-browser.png) |
+| 05 | Runs | [05-runs.png](v0.4/05-runs.png) |
+| 06 | Overview | [06-overview.png](v0.4/06-overview.png) |
+
+What changed, and it is all in **01-archipelago**:
+
+- **Every trajectory edge is drawn.** v0.3 kept the 1,000 heaviest of 11,197,
+  which reached only 26% of nodes and left most of the cloud looking like
+  unconnected dots. That fix is the whole point of this version.
+- **Trajectory edges are now within-island only** (10,810, down from 11,197).
+  The 387 that crossed between islands were migrations filed in the wrong layer,
+  so switching migration off used to leave the islands visibly wired together.
+- **"Migration routes" replaces "Migration edges"** — 598 transfer events collapse
+  to 387 distinct routes rather than drawing the same line repeatedly.
+- **Island territories default off**, which is why the metric reports edges that
+  cannot be drawn: a migration links two islands at the same genome, so its edge
+  has zero length until the islands are pulled apart.
+
+The clustered second states (`01b`, `05b`) are **absent for this version**: the
+clustering service could not start, because `archipelago-api` imports
+`archipelago_clustering` while `dEA-clustering` provides `clustering`. See the
+v0.4 CHANGELOG entry.
+
 ## v0.3 — the cascade, connected
 
 Seven shots for six pages: **01b** is the Archipelago page a second time, with
 the clustering cascade applied, because the difference between it and **01** is
 what this version *is*.
 
-| | Page | |
-|---|---|---|
-| 01 | Archipelago · Level 0 | [01-archipelago.png](v0.3/01-archipelago.png) |
-| 01b | Archipelago · **Level 4, all three stages** *(new)* | [01b-archipelago-clustered.png](v0.3/01b-archipelago-clustered.png) |
-| 02 | Migration | [02-migration.png](v0.3/02-migration.png) |
-| 03 | Convergence | [03-convergence.png](v0.3/03-convergence.png) |
-| 04 | Run browser | [04-run-browser.png](v0.3/04-run-browser.png) |
-| 05 | Runs · **now runs the pipeline** | [05-runs.png](v0.3/05-runs.png) |
-| 06 | Overview | [06-overview.png](v0.3/06-overview.png) |
 
 What to look at:
 
@@ -64,6 +87,11 @@ What to look at:
 > Streamlit serves the default page at the root, so the request 404'd and the
 > modal landed in the shot. Fixed in the script for v0.3; the v0.2 folder is left
 > exactly as captured, per the rule above.
+
+> **Screenshots for v0.3 were never captured.** The folder does not exist, so
+> the progression jumps from v0.2 to v0.4. To fill the gap, check out the v0.3
+> commit, run the app, and capture into `v0.3/` — do **not** capture it from
+> current code, which would show v0.4's behaviour under a v0.3 label.
 
 ## v0.2 — run library, cascade seam, visual pass
 

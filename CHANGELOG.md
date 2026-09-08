@@ -3,6 +3,50 @@
 One entry per tagged frontend version: what shipped, what it demonstrates, and
 what building it revealed. Screenshots for each live in `docs/version-history/<version>/`.
 
+## v0.4 — Honest edges
+
+**Shipped.** The 3D view now draws what it says it draws. Island territories
+default off, every trajectory edge is drawn rather than a biased tenth of them,
+and the migration layer owns every line that crosses between islands.
+
+**What it demonstrates.** That the log is internally consistent enough to check
+itself. Cross-island edges can be derived two independent ways — by walking
+`parent_ids` and by joining `migration_arrive` events — and on both sample runs
+the two derivations produce *exactly* the same set of node pairs (387 of 387 on
+the fully-connected run, 21 of 21 on the ring). Two paths through the schema,
+one answer.
+
+**What building it revealed.**
+
+- `nlargest(limit, "weight")` reads like "keep the important edges" and was the
+  opposite. About 90% of Level 0 trajectory edges have weight exactly 1, and the
+  few that repeat all sit in the converged core, so the old default drew 1,000
+  of 11,197 edges and reached only **26% of nodes**. Three quarters of the graph
+  looked like isolated dots — a drawing limit that read as missing data. A
+  seeded uniform sample now reaches 100%.
+- Migration edges were counted in the legend and never rendered. A migration
+  copies an individual, so both endpoints hold the same genome and project to
+  the same point — only the island differs. With territories off, 518 of 598 had
+  exactly zero length. That is geometry, not data, so the view now says so
+  instead of looking empty.
+- 387 edges (3.5%) in the "trajectory" layer were crossing between islands, every
+  one of them an arrival. Switching migration off therefore left the islands
+  visibly wired together. Crossings are now classified by comparing the
+  endpoints' `island_id` — not by the operator string, which is
+  algorithm-specific (`de_trial` here, `pso_update` elsewhere) — so the two
+  toggles finally control disjoint sets of lines.
+- Duplicate transfers along the same route were drawing the identical line
+  repeatedly: 598 events collapse to 387 distinct routes, and the event count is
+  kept as weight rather than as overdraw.
+
+**Cross-checked against the pipeline.** `dEA-clustering` was run directly over
+the same log (Level 0: 3,034 nodes; full cascade: 360, an 88.1% reduction). It
+keys nodes by `genome_hash` alone where the frontend keys by
+`(island, genome_hash)`, and the consequence is visible in its own output:
+**100% of its migration edges are self-loops.** Under hash-only keying a
+migration arrives at a node the individual already occupies, so the cross-island
+edge cannot exist. Worth settling before the two halves diverge further.
+
 ## v0.3 — The cascade, connected
 
 **Shipped.** The clustering cascade runs. `archipelago-api` is a new FastAPI
