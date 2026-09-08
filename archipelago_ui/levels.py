@@ -156,7 +156,8 @@ def collapse(stn: STN, labels: Sequence[Any]) -> STN:
     * ``visits`` sums, so node size still means "how much time was spent here";
     * ``fitness`` is the group mean and ``best_fitness`` the group minimum,
       so the colour scale and the elevation axis stay meaningful;
-    * ``is_island_best`` and ``shared`` survive if any member had them;
+    * ``is_island_best``, ``final_best`` and ``shared`` survive if any member
+      had them;
     * ``members`` is added -- how many Level 0 locations each macro node ate,
       which is the compression the cascade exists to produce.
 
@@ -194,6 +195,8 @@ def collapse(stn: STN, labels: Sequence[Any]) -> STN:
             "first_eval": grouped["first_eval"].min(),
             "t_rel": grouped["t_rel"].min(),
             "is_island_best": grouped["is_island_best"].any(),
+            # A macro node that swallowed a winner is still a winner.
+            "final_best": grouped["final_best"].any(),
             "shared": grouped["shared"].any(),
             "position": grouped["position"].apply(_centroid),
         }

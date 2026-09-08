@@ -94,6 +94,14 @@ def build_stn(run: Run, islands: list[int] | None = None) -> STN:
     shared = nodes.groupby("genome_hash")["island_id"].nunique()
     nodes["shared"] = nodes["genome_hash"].map(shared).gt(1)
 
+    # Where each island actually finished. NOT the is_island_best column above:
+    # the harness sets that whenever an island's best *improves*, so an island
+    # flags one row per improvement -- 32 rows across 4 islands on a sample run,
+    # of which only the last per island is a winner. This reads the island_end
+    # events instead, which is the same source the clustering pipeline uses for
+    # its own final_best_islands, so both sides mean one thing by "island best".
+    nodes["final_best"] = _final_best_mask(run, nodes)
+
     # ---- trajectory edges ------------------------------------------------
     # individual_id -> node_key, so parent ids resolve to nodes.
     lookup = dict(zip(work["individual_id"], work["node_key"]))
@@ -141,6 +149,33 @@ def build_stn(run: Run, islands: list[int] | None = None) -> STN:
 
     migrations = pd.DataFrame(migration_rows)
     return STN(nodes, edges, migrations)
+
+
+def _final_best_mask(run: Run, nodes: pd.DataFrame) -> pd.Series:
+    """True for a node that is where its own island finished.
+
+    An ``island_end`` event carries that island's ``best_genome_hash``, so a
+    winner is an *(island, location)* pair -- exactly a node key. Matching on the
+    hash alone would light the same location up under every island that visited
+    it, which is wrong: two islands can converge on one genome, and only the ones
+    that actually ended there are its winners.
+    """
+    winners = {
+        (event.get("island_id"), event.get("best_genome_hash"))
+        for event in run.event("island_end")
+        if event.get("best_genome_hash") is not None
+    }
+    if not winners:
+        # A truncated log may carry no island_end. Better no markers than the
+        # running-best flag silently standing in for them again.
+        return pd.Series(False, index=nodes.index)
+    return pd.Series(
+        [
+            (int(island), genome_hash) in winners
+            for island, genome_hash in zip(nodes["island_id"], nodes["genome_hash"])
+        ],
+        index=nodes.index,
+    )
 
 
 def coordinate_matrix(nodes: pd.DataFrame) -> np.ndarray:

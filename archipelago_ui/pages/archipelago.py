@@ -139,7 +139,10 @@ def _figure(stn, coords, options, run: Run) -> go.Figure:
         )
 
     # --- island bests, starred, on top -------------------------------------
-    best_mask = nodes["is_island_best"].fillna(False).to_numpy()
+    # final_best, not is_island_best: the latter is a running flag the harness
+    # sets on every improvement, so it drew a diamond for the whole descent
+    # history instead of the four places the islands actually finished.
+    best_mask = nodes["final_best"].fillna(False).to_numpy()
     if best_mask.any():
         best = coords[best_mask]
         figure.add_trace(
