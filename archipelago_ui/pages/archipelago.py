@@ -194,16 +194,22 @@ def render(run: Run) -> None:
         st.error("No decodable genomes in this run — nothing to place.")
         return
 
-    # Abstraction level. Level 0 is the identity, so this is a no-op until the
-    # clustering cascade registers a reducer -- see archipelago_ui/levels.py.
+    # Abstraction level. Level 0 is the identity; a higher level is whatever
+    # reducer registered itself for that key -- see archipelago_ui/levels.py.
     level = selected_level()
     raw_nodes = stn.n_nodes
+    params: dict = {}
     if not level.available:
         st.info(
             f"**{level.label}** is not built yet — showing Level 0. {level.detail}",
             icon=":material/construction:",
         )
-    reduction = levels.apply(level.key, stn, run)
+    elif level.controls is not None:
+        # A level's own controls belong beside the view they change, not in the
+        # sidebar: the stage toggles are as much part of this picture as the
+        # layout switches above them.
+        params = dict(level.controls(run))
+    reduction = levels.apply(level.key, stn, run, params)
     stn = reduction.stn
 
     projection = project(
