@@ -2,6 +2,8 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+# Playwright, for scripts/capture_screenshots.py
+.venv-capture/
 .streamlit/secrets.toml
 .DS_Store
 

@@ -3,6 +3,84 @@
 One entry per tagged frontend version: what shipped, what it demonstrates, and
 what building it revealed. Screenshots for each live in `docs/version-history/<version>/`.
 
+## v0.3 — The cascade, connected
+
+**Shipped.** The clustering cascade runs. `archipelago-api` is a new FastAPI
+service that calls into `dEA-clustering` and hands back cluster labels; this app
+turns them into a collapsed network.
+
+The controls live on the **Runs** page, where a run is submitted: pick the run,
+toggle which of LSH / BIRCH / DenStream execute, tune them if you want, and press
+**Run clustering**. That button is the REST call, and it is the only thing in the
+app that starts one.
+
+Every execution is kept. Clustering a run with LSH only and then with all three
+leaves both available, and the Archipelago page gained a **Clustering result**
+picker to choose between them — because comparing two configurations is the point
+of a toggleable pipeline, and you cannot compare what has been overwritten. The
+`lsh` / `birch` / `denstream` placeholders are unregistered: which stages ran is
+a property of a result, not of a level.
+
+**What it demonstrates.** That the seam v0.2 designed was the right one. The
+cascade arrived as an addition and not a rewrite: `app.py` gained one import,
+`pages/archipelago.py` gained a call to `level.controls()`, and **no view
+changed**. On the sample run the full cascade takes 3,294 nodes to 842 — 3.9×.
+
+**Why the API returns labels, not the artifact.** `dEA-clustering` emits a
+documented schema-1.0 artifact — `nodes.json`, `edges.json` and the rest. Handing
+that to this app would have meant rewriting the 3D view to consume a second,
+differently-shaped graph. But this app already builds its own Level 0 network
+from the same log and already knows how to collapse it given one label per node.
+So the API returns exactly that, keyed by this app's own node key
+`"<island>:<genome_hash>"`. The smallest thing that connects the two systems is
+labels; the artifact stays available behind `include_artifact`.
+
+**Neither repository was modified.** `dEA-clustering` is imported through its
+public entry points and nothing in it was touched. The service reads
+`STAGE_ORDER` from the pipeline's own `Config.stage_flags()` rather than
+restating it, so the two cannot drift apart.
+
+**What building it revealed.**
+
+- **A location can receive two cluster labels, and only under DenStream.** Rows
+  sharing a `genome_hash` share a feature vector, so LSH and BIRCH necessarily
+  agree on them. DenStream ages points, so a location revisited long after it was
+  first seen can land in a newer micro-cluster. Running DenStream alone on the
+  sample run produces 18 such locations. The majority label is used and the count
+  is surfaced as a warning, rather than the choice being made silently.
+- **The compression figure is not the raw cluster count.** A macro node never
+  spans two islands, so the drawn node count is the number of distinct
+  `(island, label)` pairs, not of labels. The API reports both.
+- **`levels.controls` was documented but never called.** v0.2 defined per-level
+  controls in the contract and the page never invoked them, so no level could
+  have had a switch of its own. The stage toggles are the first user of it.
+- **Configuring the pipeline belongs where the run is submitted, not where the
+  result is viewed.** The first cut put the toggles behind the sidebar's
+  abstraction-level picker, which meant nothing on the default screen suggested
+  they existed. They moved to the Runs page, and `archipelago_ui/extensions.py`
+  is the seam that let them go there without `pages/library.py` importing the API
+  client — the same inward-registration rule `levels.py` already used.
+- **Viewing must not be able to start work.** With toggles on the Archipelago
+  page, moving one fired a clustering request: an identical configuration came
+  back from cache, but a new one ran the pipeline. Looking at a graph should
+  never do that. The viewing side now imports no HTTP client at all, so it is not
+  a matter of care — it structurally cannot reach the service.
+- **Streamlit discards widget state when you leave the page that drew it.** Two
+  pages sharing one set of widget keys therefore do *not* share a selection:
+  running LSH-only on Runs and then opening Archipelago silently redrew all three
+  stages, because the toggles had reset to their defaults. The selection now
+  lives in a plain session key that widgets read from and write back to.
+- **A widget key cannot be assigned after its widget exists.** Switching the
+  abstraction level for the user, so the result is on screen when they arrive,
+  is a write to `abstraction_level` — and the sidebar picker is drawn before the
+  page body. It works from a button's `on_click`, which runs before the rerun
+  that creates the widgets.
+- **The screenshot script was capturing the wrong thing for the default page.**
+  Streamlit serves a default page at the root, so requesting its declared
+  `url_path` raises a "Page not found" modal — which then landed *in* the
+  screenshot. `v0.2/01-archipelago.png` has it. Fixed for v0.3 onward; the old
+  folder is left as captured, since a version history that gets edited is not one.
+
 ## v0.2 — Runs in, cascade seam out
 
 **Shipped.** A **Runs** page: bring a run in as a zip, as loose files, or by
