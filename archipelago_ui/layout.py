@@ -147,8 +147,13 @@ def edge_segments(
 
     frame = edges
     if limit is not None and len(frame) > limit:
-        sort_key = "weight" if "weight" in frame.columns else frame.columns[-1]
-        frame = frame.nlargest(limit, sort_key)
+        # A uniform sample, NOT the heaviest edges. On a continuous run ~90% of
+        # trajectory edges have weight 1, and the few that repeat are all in the
+        # converged core -- so "heaviest first" drew the centre densely and left
+        # every peripheral node with no edge at all, which read as missing data.
+        # Sampling is representative and the seed keeps the picture stable
+        # across reruns.
+        frame = frame.sample(n=limit, random_state=0)
 
     known = coords.index
     xs: list[float] = []

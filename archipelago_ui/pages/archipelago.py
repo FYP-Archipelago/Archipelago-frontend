@@ -24,7 +24,7 @@ def _controls(run: Run) -> dict:
     )
     territories = row[1].toggle(
         "Island territories",
-        value=True,
+        value=False,
         help="Give each island its own footprint instead of overlaying them all.",
     )
     show_migration = row[2].toggle(
@@ -36,8 +36,8 @@ def _controls(run: Run) -> dict:
         "Islands", run.islands, default=run.islands, help="Filter to a subset."
     )
     edge_limit = row[4].select_slider(
-        "Edges drawn", options=[0, 250, 1000, 3000, 10000], value=1000,
-        help="Heaviest edges first. Drawing all of them is what makes a hairball.",
+        "Edges drawn", options=[0, 1000, 5000, 20000, 100000], value=20000,
+        help="A uniform sample when the run has more than this. 20k covers most runs whole.",
     )
     colour_by = row[5].radio("Colour by", ["Island", "Fitness"], horizontal=True)
 
@@ -49,6 +49,28 @@ def _controls(run: Run) -> dict:
         "edge_limit": edge_limit,
         "colour_by": colour_by,
     }
+
+
+def _degenerate_migrations(stn, coords) -> int:
+    """Migration edges whose two endpoints land on the same 3D point.
+
+    A migration copies an individual, so the source and destination nodes hold
+    the *same genome* and therefore project to the same place. Only the island
+    differs, so unless the islands are pulled apart the edge has zero length and
+    Plotly draws nothing -- the legend counts hundreds of edges and the plot
+    shows none. That is a geometry problem, not a data problem, and it is worth
+    saying out loud rather than letting the view look empty.
+    """
+    if stn.migrations.empty:
+        return 0
+    known = coords.index
+    count = 0
+    for source, target in zip(stn.migrations["source"], stn.migrations["target"]):
+        if source in known and target in known:
+            a, b = coords.loc[source], coords.loc[target]
+            if (a["x"], a["y"], a["z"]) == (b["x"], b["y"], b["z"]):
+                count += 1
+    return count
 
 
 def _figure(stn, coords, options, run: Run) -> go.Figure:
@@ -222,7 +244,15 @@ def render(run: Run) -> None:
     metrics = st.columns(5)
     metrics[0].metric("Nodes", f"{stn.n_nodes:,}")
     metrics[1].metric("Trajectory edges", f"{stn.n_edges:,}")
-    metrics[2].metric("Migration edges", f"{len(stn.migrations):,}")
+    hidden = _degenerate_migrations(stn, projection.frame)
+    metrics[2].metric(
+        "Migration edges",
+        f"{len(stn.migrations):,}",
+        delta=f"-{hidden:,} not drawable" if hidden else None,
+        delta_color="off",
+        help="A migration links two islands at the same genome, so the edge only "
+             "has length once the islands are pulled apart.",
+    )
     metrics[3].metric("Shared locations", f"{int(stn.nodes['shared'].sum()):,}",
                       help="Visited by more than one island.")
     metrics[4].metric(
@@ -253,6 +283,15 @@ def render(run: Run) -> None:
             f"⚠️ The projection keeps only <b>{projection.retained_variance:.0%}</b> of the "
             "variance, so distances across the plane are unreliable — read the structure, not "
             "the spacing. This is a property of the space, not of the run."
+        )
+
+    if hidden and options["show_migration"]:
+        caption(
+            f"⚠️ All <b>{hidden:,}</b> migration edges have zero length here, so none of them "
+            "render. A migration copies an individual, so both endpoints hold the same genome "
+            "and project to the same point — only the island differs. Turn on "
+            "<b>Island territories</b> to separate the islands and give these edges somewhere "
+            "to span."
         )
 
     st.plotly_chart(_figure(stn, projection.frame, options, run), use_container_width=True)
