@@ -26,6 +26,8 @@ export interface LayoutOptions {
   elevation: boolean;
   /** Give each island its own footprint instead of overlaying them. */
   territories: boolean;
+  /** Spread the vertical axis by rank rather than raw fitness. */
+  rankFitness: boolean;
 }
 
 export interface StnPayload {
@@ -78,6 +80,7 @@ function project(options: LayoutOptions): LayoutPayload {
       ? pcaLayout(snapshot, {
           elevation: options.elevation,
           territories: options.territories,
+          rankFitness: options.rankFitness,
           maximising,
         })
       : driftLayout(snapshot);

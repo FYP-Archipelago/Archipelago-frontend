@@ -29,8 +29,12 @@ function fitView(
     const extent = Math.max(spanX, spanY, spanZ);
     return {
       target,
-      zoom: Math.log2((Math.min(width, height) / extent) * 0.95),
-      rotationX: 26, rotationOrbit: -20,
+      // Perspective needs more room than an orthographic fit: the cloud is a
+      // volume, and a corner of it swings closer to the camera as it turns.
+      zoom: Math.log2((Math.min(width, height) / extent) * 0.78),
+      // Looking down from above the plane, so the fitness axis reads as height
+      // and convergence as descent.
+      rotationX: 22, rotationOrbit: -28,
       minZoom: -6, maxZoom: 8,
     };
   }
@@ -56,9 +60,11 @@ export default function App() {
   const [layoutKind, setLayoutKind] = useState<LayoutKind>("pca");
   const [elevation, setElevation] = useState(true);
   const [territories, setTerritories] = useState(false);
+  const [rankFitness, setRankFitness] = useState(true);
 
   const [exposure, setExposure] = useState(1);
   const [showMigrations, setShowMigrations] = useState(true);
+  const [showCage, setShowCage] = useState(true);
   const [hiddenIslands, setHiddenIslands] = useState<ReadonlySet<number>>(new Set());
   const [viewState, setViewState] = useState<Record<string, unknown>>({});
 
@@ -66,8 +72,8 @@ export default function App() {
   const canvasRef = useRef<HTMLDivElement | null>(null);
 
   const options = useMemo<LayoutOptions>(
-    () => ({ kind: layoutKind, elevation, territories }),
-    [layoutKind, elevation, territories],
+    () => ({ kind: layoutKind, elevation, territories, rankFitness }),
+    [layoutKind, elevation, territories, rankFitness],
   );
   const optionsRef = useRef(options);
   optionsRef.current = options;
@@ -294,6 +300,16 @@ export default function App() {
               />
               <span className="control-label">Island grouping</span>
             </label>
+            {elevation && (
+              <label className="control control-inline">
+                <input
+                  type="checkbox"
+                  checked={rankFitness}
+                  onChange={(e) => setRankFitness(e.target.checked)}
+                />
+                <span className="control-label">Even height</span>
+              </label>
+            )}
           </>
         )}
 
@@ -314,6 +330,17 @@ export default function App() {
           />
           <span className="control-label">Migrations</span>
         </label>
+
+        {layout?.dims === 3 && (
+          <label className="control control-inline">
+            <input
+              type="checkbox"
+              checked={showCage}
+              onChange={(e) => setShowCage(e.target.checked)}
+            />
+            <span className="control-label">Frame</span>
+          </label>
+        )}
 
         {payload !== null && (
           <div className="control">
@@ -348,7 +375,9 @@ export default function App() {
             onViewStateChange={setViewState}
             exposure={exposure}
             showMigrations={showMigrations}
+            showCage={showCage}
             hiddenIslands={hiddenIslands}
+            onError={(message) => setError(`graphics: ${message}`)}
           />
         )}
         {phase !== null && (

@@ -23,6 +23,8 @@ export interface PcaOptions {
   elevation: boolean;
   /** Give each island its own footprint instead of overlaying them all. */
   territories: boolean;
+  /** Spread the vertical axis by rank rather than raw fitness. */
+  rankFitness: boolean;
   maximising: boolean;
 }
 
@@ -106,7 +108,12 @@ export function pcaLayout(snapshot: StnSnapshot, options: PcaOptions): LayoutRes
     for (let i = 0; i < n; i += 1) {
       source[i] = options.maximising ? -snapshot.fitness[i]! : snapshot.fitness[i]!;
     }
-    vertical = normalise(source, n);
+    // Fitness is heavily skewed: a few terrible initial points set the top of the
+    // range and everything else piles up at the floor, so a linear axis spends
+    // most of its height on empty space. Ranking spreads the nodes over the axis
+    // while staying monotonic in fitness, so descent still means improvement --
+    // only the spacing between levels stops being linear.
+    vertical = options.rankFitness ? rankNormalise(source, n) : normalise(source, n);
   } else {
     vertical = normalise(projected[2] ?? new Float64Array(n), n);
   }
@@ -144,6 +151,19 @@ export function pcaLayout(snapshot: StnSnapshot, options: PcaOptions): LayoutRes
       honesty: { retainedVariance: retained, componentsUsed: components + (options.elevation ? 0 : 0) },
     },
   };
+}
+
+/** Position by order rather than by value, mapped to [-1, 1]. */
+function rankNormalise(values: Float64Array, n: number): Float64Array {
+  const order = Array.from({ length: n }, (_, i) => i).sort(
+    (a, b) => values[a]! - values[b]!,
+  );
+  const out = new Float64Array(n);
+  if (n === 1) return out;
+  for (let rank = 0; rank < n; rank += 1) {
+    out[order[rank]!] = (rank / (n - 1)) * 2 - 1;
+  }
+  return out;
 }
 
 /** To [-1, 1]; a constant axis collapses to the middle rather than blowing up. */
