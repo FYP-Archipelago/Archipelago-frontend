@@ -1,0 +1,104 @@
+/**
+ * The bathymetric palette, carried over verbatim from `archipelago_ui/theme.py`.
+ *
+ * Deep water ground, soundings teal, and chart magenta reserved -- as on a real
+ * navigational chart -- for the thing you must not miss, which here is a
+ * migration. That reservation is a rule, not a preference: nothing else in the
+ * app is allowed to be magenta.
+ */
+
+:root {
+  /* ground and ink */
+  --deep: #08171f;
+  --surface: #0e2530;
+  --rule: #244251;
+  --ink: #dde8e9;
+  --ink-soft: #9cb2b7;
+  --ink-faint: #708a91;
+
+  /* semantic accents */
+  --teal: #4fbfb3;
+  --migration: #ff4d9d;
+  --island-best: #ffd166;
+
+  /* per-island categorical, wrapping at six */
+  --island-0: #5ac8b8;
+  --island-1: #f2a65a;
+  --island-2: #7fa7e8;
+  --island-3: #c88be0;
+  --island-4: #8fd16a;
+  --island-5: #e8756b;
+
+  --font-body: Archivo, "Segoe UI", "Helvetica Neue", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background:
+    radial-gradient(900px 520px at 12% -8%, rgba(79, 191, 179, 0.055), transparent 70%),
+    radial-gradient(760px 480px at 92% 6%, rgba(255, 77, 157, 0.032), transparent 70%),
+    var(--deep);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-body);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--teal);
+}
+
+.deck-copy {
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.55;
+  max-width: 74ch;
+}
+
+.caption {
+  color: var(--ink-faint);
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 80ch;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border: 1px solid rgba(79, 191, 179, 0.3);
+  border-radius: 3px;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--teal);
+}
+
+:focus-visible {
+  outline: 2px solid rgba(79, 191, 179, 0.65);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
