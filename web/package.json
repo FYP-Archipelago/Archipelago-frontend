@@ -1,0 +1,22 @@
+{
+  "name": "archipelago-web",
+  "private": true,
+  "version": "0.5.0",
+  "type": "module",
+  "description": "Archipelago visualization — TypeScript rewrite",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "golden": "cd .. && python scripts/dump_stn_golden.py"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/papaparse": "^5.3.15",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.5"
+  },
+  "dependencies": {
+    "papaparse": "^5.4.1"
+  }
+}

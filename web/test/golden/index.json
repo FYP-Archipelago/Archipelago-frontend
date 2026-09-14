@@ -1,0 +1,22 @@
+[
+  {
+    "run_id": "run-20260903T230942Z-c7f38cc1",
+    "counts": {
+      "evaluations": 3866,
+      "nodes": 3294,
+      "edges": 10810,
+      "migrations": 387,
+      "transfer_events": 598
+    }
+  },
+  {
+    "run_id": "run-20260903T230838Z-4891f68f",
+    "counts": {
+      "evaluations": 1786,
+      "nodes": 1763,
+      "edges": 6538,
+      "migrations": 21,
+      "transfer_events": 34
+    }
+  }
+]
