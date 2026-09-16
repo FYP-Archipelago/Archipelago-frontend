@@ -3,47 +3,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   LayoutKind, LayoutOptions, LayoutPayload, StnPayload, WorkerRequest, WorkerResponse,
 } from "./data/worker/data.worker.js";
-import { StnDeck } from "./render/StnDeck.js";
+import { StnScene } from "./render/StnScene.js";
 import "./theme/tokens.css";
 import "./app.css";
 
 const ISLAND_HEX = ["#5AC8B8", "#F2A65A", "#7FA7E8", "#C88BE0", "#8FD16A", "#E8756B"];
-
-/** Frame the whole run, with a little air around it. */
-function fitView(
-  layout: LayoutPayload,
-  width: number,
-  height: number,
-): Record<string, unknown> {
-  const { min, max } = layout.bounds;
-  const target: [number, number, number] = [
-    (min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2,
-  ];
-  const spanX = Math.max(max[0] - min[0], 1);
-  const spanY = Math.max(max[1] - min[1], 1);
-
-  if (layout.dims === 3) {
-    // Orbiting can swing any axis into either screen direction, so the frame has
-    // to hold the largest extent whichever way the camera ends up pointing.
-    const spanZ = Math.max(max[2] - min[2], 1);
-    const extent = Math.max(spanX, spanY, spanZ);
-    return {
-      target,
-      // Perspective needs more room than an orthographic fit: the cloud is a
-      // volume, and a corner of it swings closer to the camera as it turns.
-      zoom: Math.log2((Math.min(width, height) / extent) * 0.78),
-      // Looking down from above the plane, so the fitness axis reads as height
-      // and convergence as descent.
-      rotationX: 22, rotationOrbit: -28,
-      minZoom: -6, maxZoom: 8,
-    };
-  }
-  return {
-    target,
-    zoom: Math.log2(Math.min(width / spanX, height / spanY) * 0.95),
-    minZoom: -6, maxZoom: 8,
-  };
-}
 
 export default function App() {
   const [runs, setRuns] = useState<string[]>([]);
@@ -64,12 +28,12 @@ export default function App() {
 
   const [exposure, setExposure] = useState(1);
   const [showMigrations, setShowMigrations] = useState(true);
-  const [showCage, setShowCage] = useState(true);
+  const [showFrame, setShowFrame] = useState(true);
+  const [nodeScale, setNodeScale] = useState(1);
+  const [resetCount, setResetCount] = useState(0);
   const [hiddenIslands, setHiddenIslands] = useState<ReadonlySet<number>>(new Set());
-  const [viewState, setViewState] = useState<Record<string, unknown>>({});
 
   const workerRef = useRef<Worker | null>(null);
-  const canvasRef = useRef<HTMLDivElement | null>(null);
 
   const options = useMemo<LayoutOptions>(
     () => ({ kind: layoutKind, elevation, territories, rankFitness }),
@@ -77,11 +41,6 @@ export default function App() {
   );
   const optionsRef = useRef(options);
   optionsRef.current = options;
-
-  const frame = useCallback((next: LayoutPayload) => {
-    const box = canvasRef.current?.getBoundingClientRect();
-    setViewState(fitView(next, box?.width ?? 1200, box?.height ?? 620));
-  }, []);
 
   useEffect(() => {
     fetch("/runs")
@@ -111,11 +70,11 @@ export default function App() {
       else if (message.type === "ready") {
         setPayload(message.payload);
         setLayout(message.layout);
-        frame(message.layout);
         setPhase(null);
       } else if (message.type === "layout") {
+        // A new projection of the same run: the camera stays where the user left
+        // it, so toggling a control never throws the view somewhere else.
         setLayout(message.layout);
-        frame(message.layout);
         setPhase(null);
       } else {
         setError(message.message);
@@ -129,7 +88,7 @@ export default function App() {
       worker.terminate();
       workerRef.current = null;
     };
-  }, [runId, frame]);
+  }, [runId]);
 
   // Re-project when the layout choice changes. The network itself is not rebuilt,
   // so this is a projection, not a reload.
@@ -331,12 +290,21 @@ export default function App() {
           <span className="control-label">Migrations</span>
         </label>
 
+        <label className="control">
+          <span className="control-label">Node size</span>
+          <input
+            type="range" min={0.4} max={2.5} step={0.05}
+            value={nodeScale}
+            onChange={(e) => setNodeScale(Number(e.target.value))}
+          />
+        </label>
+
         {layout?.dims === 3 && (
           <label className="control control-inline">
             <input
               type="checkbox"
-              checked={showCage}
-              onChange={(e) => setShowCage(e.target.checked)}
+              checked={showFrame}
+              onChange={(e) => setShowFrame(e.target.checked)}
             />
             <span className="control-label">Frame</span>
           </label>
@@ -366,19 +334,34 @@ export default function App() {
         )}
       </div>
 
-      <div className="canvas" ref={canvasRef}>
+      <div className="canvas">
         {payload !== null && layout !== null && (
-          <StnDeck
+          <StnScene
             payload={payload}
             layout={layout}
-            viewState={viewState}
-            onViewStateChange={setViewState}
             exposure={exposure}
+            nodeScale={nodeScale}
             showMigrations={showMigrations}
-            showCage={showCage}
+            showFrame={showFrame}
             hiddenIslands={hiddenIslands}
+            resetToken={`${runId ?? ""}:${resetCount}`}
             onError={(message) => setError(`graphics: ${message}`)}
           />
+        )}
+        {payload !== null && (
+          <button className="ghost canvas-reset" onClick={() => setResetCount((c) => c + 1)}>
+            Reset view
+          </button>
+        )}
+        {payload !== null && (
+          <div className="legend" aria-label="Legend">
+            <span><i className="glyph glyph-sphere" />location, by island</span>
+            <span><i className="glyph glyph-start" />trajectory start</span>
+            <span><i className="glyph glyph-end" />where an island finished</span>
+            <span><i className="glyph glyph-best" />best found</span>
+            <span><i className="glyph glyph-shared" />reached by several islands</span>
+            <span><i className="glyph glyph-migration" />migration</span>
+          </div>
         )}
         {phase !== null && (
           <div className="overlay">
@@ -408,8 +391,9 @@ export default function App() {
           </>
         )}
         Every edge is drawn at every setting: <b>exposure</b> changes how density
-        maps to opacity, not which edges exist. Gold marks where each island
-        finished; magenta is a migration. Drag to orbit, scroll to zoom.
+        maps to opacity, not which edges exist. Node size follows visits. Drag to
+        orbit and scroll to zoom — the frame stays put, and Reset view brings the
+        camera back.
       </p>
     </div>
   );

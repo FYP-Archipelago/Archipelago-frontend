@@ -160,8 +160,21 @@ function rankNormalise(values: Float64Array, n: number): Float64Array {
   );
   const out = new Float64Array(n);
   if (n === 1) return out;
-  for (let rank = 0; rank < n; rank += 1) {
-    out[order[rank]!] = (rank / (n - 1)) * 2 - 1;
+  // Equal values share their average rank. Without this, ties are broken by sort
+  // order, so a migrant and the individual it was copied from -- same genome,
+  // same fitness -- would be drawn at different heights. "Equal" allows for the
+  // last ulp: a node's fitness is a mean over its visits, and the same value
+  // averaged over a different number of visits does not always round back to
+  // exactly itself.
+  const same = (a: number, b: number) =>
+    Math.abs(a - b) <= 1e-9 * Math.max(Math.abs(a), Math.abs(b), 1);
+  let start = 0;
+  while (start < n) {
+    let end = start;
+    while (end + 1 < n && same(values[order[end + 1]!]!, values[order[start]!]!)) end += 1;
+    const shared = ((start + end) / 2 / (n - 1)) * 2 - 1;
+    for (let rank = start; rank <= end; rank += 1) out[order[rank]!] = shared;
+    start = end + 1;
   }
   return out;
 }

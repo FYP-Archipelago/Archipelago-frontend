@@ -17,18 +17,17 @@
     "@types/papaparse": "^5.3.15",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.170.0",
     "@vitejs/plugin-react": "^4.7.0",
     "typescript": "^5.7.2",
     "vite": "^7.3.6",
     "vitest": "^3.0.5"
   },
   "dependencies": {
-    "@deck.gl/core": "^9.4.0",
-    "@deck.gl/layers": "^9.4.0",
-    "@deck.gl/react": "^9.4.0",
     "d3-force-3d": "^3.0.6",
     "papaparse": "^5.4.1",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "three": "^0.170.0"
   }
 }

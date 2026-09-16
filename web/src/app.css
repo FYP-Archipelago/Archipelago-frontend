@@ -98,7 +98,7 @@
   text-transform: uppercase;
   color: var(--ink-faint);
 }
-.control input[type="range"] { width: 210px; accent-color: var(--teal); }
+.control input[type="range"] { width: 140px; accent-color: var(--teal); }
 .control input[type="checkbox"] { accent-color: var(--teal); width: 15px; height: 15px; }
 
 .island-chips { display: flex; gap: 6px; }
@@ -175,10 +175,71 @@
   color: var(--teal);
 }
 
-.controls { row-gap: 12px; column-gap: 24px; }
+.controls { row-gap: 12px; column-gap: 20px; }
 
 .metric-warn {
   font-size: 11px;
   color: var(--island-best);
   margin-top: 2px;
+}
+
+/* --- reset button ------------------------------------------------------ */
+
+.ghost {
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--ink-soft);
+  border-radius: 3px;
+  padding: 6px 12px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  cursor: pointer;
+}
+.ghost:hover { color: var(--teal); border-color: rgba(79, 191, 179, 0.45); }
+
+/* --- legend: STN node conventions ----------------------------------------- */
+
+.legend {
+  position: absolute;
+  left: 14px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px;
+  background: rgba(14, 37, 48, 0.82);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  pointer-events: none;
+}
+.legend span { display: flex; align-items: center; gap: 8px; }
+.glyph { display: inline-block; width: 10px; height: 10px; flex: none; }
+.glyph-sphere {
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #bdeee7, #5ac8b8 55%, #2c6f66);
+}
+.glyph-shared {
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #e3e8ea, #9aa7ad 55%, #56626a);
+}
+.glyph-best {
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffb4b4, #ef4444 55%, #8c1f1f);
+}
+.glyph-start { background: #fbbf24; }
+.glyph-end {
+  width: 0; height: 0;
+  border-left: 5.5px solid transparent;
+  border-right: 5.5px solid transparent;
+  border-bottom: 10px solid #dde8e9;
+}
+.glyph-migration { height: 2px; background: var(--migration); }
+
+.canvas-reset {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(14, 37, 48, 0.82);
 }
