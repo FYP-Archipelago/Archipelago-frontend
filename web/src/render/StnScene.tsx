@@ -27,18 +27,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 import { NodeFlag } from "../contract/schema.js";
 import type { LayoutPayload, StnPayload } from "../data/worker/data.worker.js";
-
-/** The palette's island cycle. Must match tokens.css. */
-const ISLAND_HEX = [0x5ac8b8, 0xf2a65a, 0x7fa7e8, 0xc88be0, 0x8fd16a, 0xe8756b];
-const START_HEX = 0xfbbf24; // STN Analytics' start box
-const END_HEX = 0xdde8e9; // STN draws ends dark; on this ground that vanishes, so ink
-const BEST_HEX = 0xef4444; // STN's best node
-const SHARED_HEX = 0x9aa7ad; // STN's grey, shifted toward the palette's teal cast
-const MIGRATION_HEX = 0xff4d9d;
-const DEEP_HEX = 0x08171f;
-const RULE_HEX = 0x244251;
-const GRID_HEX = 0x16303c;
-const INK_FAINT = "#708a91";
+import { SCENE, type ThemeName } from "../theme/palette.js";
 
 /** Half the side of the cube the data is fitted into. */
 const HALF = 1;
@@ -52,6 +41,7 @@ export interface StnSceneProps {
   showMigrations: boolean;
   showFrame: boolean;
   hiddenIslands: ReadonlySet<number>;
+  theme: ThemeName;
   /** Changing this puts the camera back to its starting position. */
   resetToken: string;
   onError: (message: string) => void;
@@ -74,8 +64,9 @@ interface Stage {
 
 export function StnScene({
   payload, layout, exposure, nodeScale, showMigrations, showFrame,
-  hiddenIslands, resetToken, onError,
+  hiddenIslands, theme, resetToken, onError,
 }: StnSceneProps) {
+  const palette = SCENE[theme];
   const hostRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Stage | null>(null);
   const edgeMaterialRef = useRef<THREE.LineBasicMaterial | null>(null);
@@ -147,7 +138,7 @@ export function StnScene({
       return;
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(DEEP_HEX, 1);
+    renderer.setClearColor(SCENE[theme].canvas, 1);
     host.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
@@ -244,6 +235,14 @@ export function StnScene({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The ground follows the theme without rebuilding the stage.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (stage === null) return;
+    stage.renderer.setClearColor(palette.canvas, 1);
+    stage.dirty = true;
+  }, [palette]);
+
   // ---- camera: reset only for a new run, a 2D/3D switch, or the button ----
   useEffect(() => {
     const stage = stageRef.current;
@@ -275,23 +274,23 @@ export function StnScene({
     if (is3d) {
       const box = new THREE.LineSegments(
         new THREE.EdgesGeometry(new THREE.BoxGeometry(2 * HALF, 2 * HALF, 2 * HALF)),
-        new THREE.LineBasicMaterial({ color: RULE_HEX, transparent: true, opacity: 0.9 }),
+        new THREE.LineBasicMaterial({ color: palette.rule, transparent: true, opacity: 0.9 }),
       );
       stage.frame.add(box);
 
-      const grid = new THREE.GridHelper(2 * HALF, 10, GRID_HEX, GRID_HEX);
+      const grid = new THREE.GridHelper(2 * HALF, 10, palette.grid, palette.grid);
       grid.rotateX(Math.PI / 2); // GridHelper lies in XZ; the floor here is XY
       grid.position.z = -HALF;
       stage.frame.add(grid);
 
       const [xName, yName, zName] = layout.provenance.axisLabels;
-      stage.frame.add(label(xName, [0, -HALF - 0.28, -HALF]));
-      stage.frame.add(label(yName, [HALF + 0.3, 0, -HALF]));
-      stage.frame.add(label(zName, [-HALF - 0.3, -HALF - 0.3, 0]));
+      stage.frame.add(label(xName, [0, -HALF - 0.28, -HALF], palette.label));
+      stage.frame.add(label(yName, [HALF + 0.3, 0, -HALF], palette.label));
+      stage.frame.add(label(zName, [-HALF - 0.3, -HALF - 0.3, 0], palette.label));
     }
     stage.frame.visible = showFrame;
     stage.dirty = true;
-  }, [is3d, layout.provenance, showFrame]);
+  }, [is3d, layout.provenance, showFrame, palette]);
 
   // ---- nodes, edges and migrations -----------------------------------------
   useEffect(() => {
@@ -342,17 +341,22 @@ export function StnScene({
       stage.content.add(mesh);
     };
 
-    const islandTint = (i: number) => ISLAND_HEX[payload.islandId[i]! % ISLAND_HEX.length]!;
+    const { islands } = palette;
+    const islandTint = (i: number) => islands[payload.islandId[i]! % islands.length]!;
     place(byKind.sphere, sphere, radius, islandTint);
-    place(byKind.shared, sphere, radius, () => SHARED_HEX);
-    place(byKind.start, cube, (i) => Math.max(radius(i), base) * 1.25, () => START_HEX);
-    place(byKind.end, cone, (i) => Math.max(radius(i), base) * 1.9, () => END_HEX);
-    place(byKind.best, sphere, (i) => Math.max(radius(i), base) * 2.6, () => BEST_HEX);
+    place(byKind.shared, sphere, radius, () => palette.shared);
+    place(byKind.start, cube, (i) => Math.max(radius(i), base) * 1.25, () => palette.start);
+    place(byKind.end, cone, (i) => Math.max(radius(i), base) * 1.9, () => palette.end);
+    place(byKind.best, sphere, (i) => Math.max(radius(i), base) * 2.6, () => palette.best);
 
-    // Trajectory edges: additive, so where the search re-walked a route it burns
-    // brighter. Weight is baked into the vertex colour; exposure is the material's
-    // opacity, so dragging the slider never rebuilds a buffer.
-    const linearIsland = ISLAND_HEX.map((hex) => new THREE.Color().setHex(hex));
+    // Trajectory edges. On the dark ground they are additive, so a route the
+    // search re-walked burns brighter; on the light ground they lay down colour,
+    // since adding light to a pale ground only washes it out. Either way weight is
+    // baked into the vertex colour and exposure is the material's opacity, so
+    // dragging the slider never rebuilds a buffer.
+    const additive = palette.additiveEdges;
+    const linearIsland = islands.map((value) => new THREE.Color().setHex(value));
+    const ground = new THREE.Color().setHex(palette.canvas);
     const count = payload.edgeSource.length;
     const edgePositions = new Float32Array(count * 6);
     const edgeColours = new Float32Array(count * 6);
@@ -366,10 +370,12 @@ export function StnScene({
       // blends in linear space, so a raw sRGB weight lands several times
       // brighter than intended and the core washes out to white.
       const tint = linearIsland[island % linearIsland.length]!;
-      const intensity = Math.min(1, 0.35 + 0.25 * (payload.edgeWeight[e]! - 1));
-      const r = tint.r * intensity;
-      const g = tint.g * intensity;
-      const bl = tint.b * intensity;
+      const intensity = Math.min(1, (additive ? 0.35 : 0.7) + 0.25 * (payload.edgeWeight[e]! - 1));
+      // Additive: dim toward black. Laid down: fade toward the ground, so a
+      // light edge is quiet and a heavy one reads in full colour.
+      const r = additive ? tint.r * intensity : ground.r + (tint.r - ground.r) * intensity;
+      const g = additive ? tint.g * intensity : ground.g + (tint.g - ground.g) * intensity;
+      const bl = additive ? tint.b * intensity : ground.b + (tint.b - ground.b) * intensity;
       for (let end = 0; end < 2; end += 1) {
         const node = end === 0 ? a : b;
         const at = written * 6 + end * 3;
@@ -388,9 +394,9 @@ export function StnScene({
     const edgeMaterial = new THREE.LineBasicMaterial({
       vertexColors: true,
       transparent: true,
-      blending: THREE.AdditiveBlending,
+      blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
       depthWrite: false,
-      opacity: edgeOpacity(exposure),
+      opacity: edgeOpacity(exposure, additive),
     });
     edgeMaterialRef.current = edgeMaterial;
     stage.content.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
@@ -411,7 +417,7 @@ export function StnScene({
     migrationGeometry.setAttribute("position", new THREE.Float32BufferAttribute(migrationPositions, 3));
     const migrations = new THREE.LineSegments(
       migrationGeometry,
-      new THREE.LineBasicMaterial({ color: MIGRATION_HEX, transparent: true, opacity: 0.85, depthWrite: false }),
+      new THREE.LineBasicMaterial({ color: palette.migration, transparent: true, opacity: 0.85, depthWrite: false }),
     );
     migrations.visible = showMigrations;
     migrationRef.current = migrations;
@@ -420,15 +426,15 @@ export function StnScene({
     stage.dirty = true;
     // exposure and showMigrations are applied by their own cheap effects below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [payload, fitted, kinds, hiddenIslands, nodeScale, is3d, n]);
+  }, [payload, fitted, kinds, hiddenIslands, nodeScale, is3d, n, palette]);
 
   useEffect(() => {
     const material = edgeMaterialRef.current;
     const stage = stageRef.current;
     if (material === null || stage === null) return;
-    material.opacity = edgeOpacity(exposure);
+    material.opacity = edgeOpacity(exposure, palette.additiveEdges);
     stage.dirty = true;
-  }, [exposure]);
+  }, [exposure, palette]);
 
   useEffect(() => {
     const migrations = migrationRef.current;
@@ -442,19 +448,21 @@ export function StnScene({
 }
 
 /** Lower exposure burns more of the field in; the curve keeps the slider useful. */
-function edgeOpacity(exposure: number): number {
-  return Math.min(1, Math.max(0.004, 0.06 / exposure));
+function edgeOpacity(exposure: number, additive: boolean): number {
+  return additive
+    ? Math.min(1, Math.max(0.004, 0.06 / exposure))
+    : Math.min(1, Math.max(0.02, 0.26 / exposure));
 }
 
 /** A camera-facing text label, sized in world units so it shrinks with distance. */
-function label(text: string, at: [number, number, number]): THREE.Sprite {
+function label(text: string, at: [number, number, number], colour: string): THREE.Sprite {
   const canvas = document.createElement("canvas");
   canvas.width = 512;
   canvas.height = 96;
   const context = canvas.getContext("2d");
   if (context !== null) {
     context.font = '500 34px Archivo, "Segoe UI", sans-serif';
-    context.fillStyle = INK_FAINT;
+    context.fillStyle = colour;
     context.textAlign = "center";
     context.textBaseline = "middle";
     context.fillText(text, 256, 48);
@@ -462,8 +470,10 @@ function label(text: string, at: [number, number, number]): THREE.Sprite {
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }),
+    // Always on top: a label hidden behind the cloud is no label at all.
+    new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, depthTest: false }),
   );
+  sprite.renderOrder = 10;
   sprite.scale.set(1.2, 0.225, 1);
   sprite.position.set(...at);
   return sprite;
