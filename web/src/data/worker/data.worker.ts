@@ -28,6 +28,8 @@ export interface LayoutOptions {
   territories: boolean;
   /** Spread the vertical axis by rank rather than raw fitness. */
   rankFitness: boolean;
+  /** Put better fitness at the top, as the clustering repo's fitness plot does. */
+  bestOnTop: boolean;
 }
 
 export interface StnPayload {
@@ -81,6 +83,7 @@ function project(options: LayoutOptions): LayoutPayload {
           elevation: options.elevation,
           territories: options.territories,
           rankFitness: options.rankFitness,
+          bestOnTop: options.bestOnTop,
           maximising,
         })
       : driftLayout(snapshot);

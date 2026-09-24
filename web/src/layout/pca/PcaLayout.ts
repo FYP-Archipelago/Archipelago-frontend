@@ -25,6 +25,12 @@ export interface PcaOptions {
   territories: boolean;
   /** Spread the vertical axis by rank rather than raw fitness. */
   rankFitness: boolean;
+  /**
+   * Better fitness at the top rather than the bottom. The Streamlit app drew a
+   * descent; the clustering repo's `--fplot` draws a climb. Both are offered
+   * until the team settles on one.
+   */
+  bestOnTop: boolean;
   maximising: boolean;
 }
 
@@ -114,6 +120,7 @@ export function pcaLayout(snapshot: StnSnapshot, options: PcaOptions): LayoutRes
     // while staying monotonic in fitness, so descent still means improvement --
     // only the spacing between levels stops being linear.
     vertical = options.rankFitness ? rankNormalise(source, n) : normalise(source, n);
+    if (options.bestOnTop) for (let i = 0; i < n; i += 1) vertical[i] = -vertical[i]!;
   } else {
     vertical = normalise(projected[2] ?? new Float64Array(n), n);
   }
@@ -146,7 +153,11 @@ export function pcaLayout(snapshot: StnSnapshot, options: PcaOptions): LayoutRes
       axisLabels: [
         "component 1",
         "component 2",
-        options.elevation ? "fitness (lower = better)" : "component 3",
+        options.elevation
+          // Named by position, not value: on a minimising run a higher point has a
+          // lower fitness, so "higher = better" would read backwards.
+          ? options.bestOnTop ? "fitness · best at top" : "fitness · best at bottom"
+          : "component 3",
       ],
       honesty: { retainedVariance: retained, componentsUsed: components + (options.elevation ? 0 : 0) },
     },

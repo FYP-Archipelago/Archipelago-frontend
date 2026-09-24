@@ -24,6 +24,7 @@
     "vitest": "^3.0.5"
   },
   "dependencies": {
+    "@observablehq/plot": "^0.6.17",
     "d3-force-3d": "^3.0.6",
     "papaparse": "^5.4.1",
     "react": "^19.3.0",
