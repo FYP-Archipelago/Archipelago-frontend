@@ -99,7 +99,8 @@ two random halves of the same data score):
 |---|---|---|
 | Island pairs | 0.002 – 0.026 | 0.018 – 0.061 |
 | Noise level | 0.002 | 0.006 |
-| Reading | Islands barely distinguishable: constant migration keeps them together | Every pair clearly above noise: the ring keeps islands apart |
+| Median pair | 0.008 | 0.055, about 7× the fully-connected median |
+| Reading | Islands stay close: most pairs within a few times the noise level | Every pair 3–10× above noise: the ring keeps islands apart |
 | One island, early vs late | 0.29 — it moves far more over time than it differs from its neighbours | 0.07 |
 | Time, all pairs | ~1 s for 3,300 points | 0.2 s |
 
