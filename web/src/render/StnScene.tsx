@@ -1,24 +1,25 @@
 /**
- * The picture, in three.js.
+ * The picture, in three.js, handled the way the old Plotly scene was.
  *
- * Two references shaped this, and each contributed one thing:
+ * What made the Streamlit view easy to look around was Plotly's *turntable*
+ * camera, and this reproduces its three parts:
  *
- *   - **The old Plotly scene** contributed how it *moves*. The data sits in a
- *     fixed cube and only the camera turns around it, with fitness pinned as the
- *     up axis, so the frame never jumps. Nothing here refits the camera when a
- *     control changes; it resets only for a new run, a switch between the 3D and
- *     2D layouts, or the Reset view button. Panning is off in 3D, so the cube
- *     cannot drift out of the middle of the canvas.
- *   - **STN Analytics** (stn-analytics.com, the reference STN tool) contributed
- *     how nodes *look*: lit spheres sized by the cube root of visits, an amber box
- *     where a trajectory starts, a cone where it ends, a red sphere for the best
- *     location found, and grey for a location more than one trajectory reached.
- *     Here a trajectory is an island's lineage, so "more than one" means islands.
+ *   - **A fixed box with walls.** The data sits in a cube and only the camera
+ *     moves. The three walls on the far side of the camera carry a grid, and they
+ *     swap as the camera turns -- exactly as Plotly draws its scene -- so there is
+ *     always a floor and a back behind the data, and the box reads as solid.
+ *   - **Fitness pinned as up.** Dragging sideways turns the table about the
+ *     fitness axis; dragging vertically tilts it. The camera never rolls.
+ *   - **Direct manipulation.** No inertia -- the view stops when the mouse
+ *     stops. Scroll zooms, double-click resets, and panning is off so the box
+ *     cannot drift away from the middle.
  *
- * Cost is kept low deliberately, so a machine without a discrete GPU still
- * draws it. Each node shape is one instanced draw call, spheres are low-poly,
- * edges are plain 1px lines, and a frame is rendered only when the camera or the
- * data actually changes -- an idle view costs nothing.
+ * Nodes are screen-space points drawn as shaded balls by a small shader: a
+ * constant size in pixels like Plotly's markers, so a zoom never turns them into
+ * boulders, with shading and a darker edge that keep overlapping nodes apart.
+ * One draw call for every node, which is also what keeps this usable on a
+ * machine without a discrete GPU. A frame is only rendered when the camera or
+ * the data changes, so an idle view costs nothing.
  */
 
 import { useEffect, useMemo, useRef } from "react";
@@ -27,16 +28,18 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 import { NodeFlag } from "../contract/schema.js";
 import type { LayoutPayload, StnPayload } from "../data/worker/data.worker.js";
-import { SCENE, type ThemeName } from "../theme/palette.js";
+import { SCENE, type ScenePalette, type ThemeName } from "../theme/palette.js";
 
 /** Half the side of the cube the data is fitted into. */
 const HALF = 1;
+/** Plotly's default eye, (1.55, 1.45, 0.85), at a distance that holds the box. */
+const EYE = new THREE.Vector3(1.55, 1.45, 0.85).normalize().multiplyScalar(5.7);
 
 export interface StnSceneProps {
   payload: StnPayload;
   layout: LayoutPayload;
-  /** Density that maps to full opacity. Lower burns more edges in. */
-  exposure: number;
+  /** Multiplies trajectory edge opacity; 1 is the default. */
+  edgeIntensity: number;
   nodeScale: number;
   showMigrations: boolean;
   showFrame: boolean;
@@ -47,8 +50,6 @@ export interface StnSceneProps {
   onError: (message: string) => void;
 }
 
-type Kind = "sphere" | "shared" | "start" | "end" | "best";
-
 interface Stage {
   renderer: THREE.WebGLRenderer;
   scene: THREE.Scene;
@@ -57,13 +58,21 @@ interface Stage {
   orbit: OrbitControls;
   pan: OrbitControls;
   content: THREE.Group;
-  frame: THREE.Group;
+  box: BoxParts | null;
   dirty: boolean;
   dims: 2 | 3;
 }
 
+/** The pieces of the plot box that follow the camera. */
+interface BoxParts {
+  group: THREE.Group;
+  /** walls[axis][side]: side 0 sits at -1, side 1 at +1. */
+  walls: THREE.Object3D[][];
+  titles: THREE.Sprite[];
+}
+
 export function StnScene({
-  payload, layout, exposure, nodeScale, showMigrations, showFrame,
+  payload, layout, edgeIntensity, nodeScale, showMigrations, showFrame,
   hiddenIslands, theme, resetToken, onError,
 }: StnSceneProps) {
   const palette = SCENE[theme];
@@ -98,34 +107,17 @@ export function StnScene({
     return out;
   }, [layout, n, is3d]);
 
-  /** Which shape each node takes, in STN precedence: best, end, start, shared. */
-  const kinds = useMemo(() => {
-    const incoming = new Uint32Array(n);
-    for (let i = 0; i < payload.edgeTarget.length; i += 1) incoming[payload.edgeTarget[i]!]! += 1;
-    // An arrived migrant has no trajectory parent on its own island -- its parent
-    // moved to the migration layer -- so it is not the start of anything.
-    const arrived = new Uint8Array(n);
-    for (let i = 0; i < payload.migrationTarget.length; i += 1) arrived[payload.migrationTarget[i]!] = 1;
-
+  /** The best fitness in the run, so the winning island's marker can stand out. */
+  const bestFitness = useMemo(() => {
     let best = payload.maximising ? -Infinity : Infinity;
     for (let i = 0; i < n; i += 1) {
       const value = payload.fitness[i]!;
       if (payload.maximising ? value > best : value < best) best = value;
     }
-
-    const out: Kind[] = new Array(n);
-    for (let i = 0; i < n; i += 1) {
-      const flags = payload.flags[i]!;
-      if (payload.fitness[i] === best) out[i] = "best";
-      else if ((flags & NodeFlag.FinalBest) !== 0) out[i] = "end";
-      else if (incoming[i] === 0 && arrived[i] === 0) out[i] = "start";
-      else if ((flags & NodeFlag.Shared) !== 0) out[i] = "shared";
-      else out[i] = "sphere";
-    }
-    return out;
+    return best;
   }, [payload, n]);
 
-  // ---- stage: renderer, cameras, controls, lights, render loop -----------
+  // ---- stage: renderer, cameras, controls, render loop --------------------
   useEffect(() => {
     const host = hostRef.current;
     if (host === null) return;
@@ -142,53 +134,46 @@ export function StnScene({
     host.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-
-    const perspective = new THREE.PerspectiveCamera(34, 1, 0.01, 100);
-    // Fitness is z, so z is up -- set before the controls read it.
-    perspective.up.set(0, 0, 1);
+    const perspective = new THREE.PerspectiveCamera(32, 1, 0.01, 100);
+    perspective.up.set(0, 0, 1); // fitness is z, so z is up
     const orthographic = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100);
-
-    // Lighting that travels with the camera, so a sphere is always lit from the
-    // viewer's upper left and reads as round from any angle.
-    const key = new THREE.DirectionalLight(0xffffff, 1.6);
-    key.position.set(-1, 1.2, 2);
-    perspective.add(key);
-    const orthoKey = new THREE.DirectionalLight(0xffffff, 1.6);
-    orthoKey.position.set(-1, 1.2, 2);
-    orthographic.add(orthoKey);
     scene.add(perspective, orthographic);
-    scene.add(new THREE.HemisphereLight(0xdde8e9, 0x0e2530, 1.15));
 
+    // Turntable: sideways turns about the up axis, vertical tilts, no roll, no
+    // drift after release, no panning.
     const orbit = new OrbitControls(perspective, renderer.domElement);
-    orbit.enableDamping = true;
-    orbit.dampingFactor = 0.09;
-    orbit.rotateSpeed = 0.75;
+    orbit.enableDamping = false;
+    orbit.enablePan = false;
+    orbit.rotateSpeed = 0.85;
     orbit.zoomSpeed = 0.9;
-    orbit.enablePan = false; // the cube stays in the middle of the canvas
-    orbit.minDistance = 1.2;
-    orbit.maxDistance = 14;
+    orbit.minDistance = 2;
+    orbit.maxDistance = 12;
+    orbit.minPolarAngle = 0.05;
+    orbit.maxPolarAngle = Math.PI - 0.05;
 
+    // The flat graph layout is a map: it pans and zooms, it does not turn.
     const pan = new OrbitControls(orthographic, renderer.domElement);
     pan.enableRotate = false;
-    pan.enableDamping = true;
-    pan.dampingFactor = 0.12;
+    pan.enableDamping = false;
     pan.screenSpacePanning = true;
     pan.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
     pan.minZoom = 0.4;
     pan.maxZoom = 40;
 
     const content = new THREE.Group();
-    const frame = new THREE.Group();
-    scene.add(frame, content);
+    scene.add(content);
 
     const stage: Stage = {
-      renderer, scene, perspective, orthographic, orbit, pan, content, frame,
-      dirty: true, dims: 3,
+      renderer, scene, perspective, orthographic, orbit, pan, content,
+      box: null, dirty: true, dims: 3,
     };
     stageRef.current = stage;
-    const markDirty = () => { stage.dirty = true; };
-    orbit.addEventListener("change", markDirty);
-    pan.addEventListener("change", markDirty);
+
+    orbit.addEventListener("change", () => {
+      if (stage.box !== null) orientBox(stage.box, perspective.position);
+      stage.dirty = true;
+    });
+    pan.addEventListener("change", () => { stage.dirty = true; });
 
     const resize = () => {
       const width = host.clientWidth || 1;
@@ -213,9 +198,7 @@ export function StnScene({
     let frameId = 0;
     const loop = () => {
       frameId = requestAnimationFrame(loop);
-      const controls = stage.dims === 3 ? orbit : pan;
-      const moved = controls.update();
-      if (!moved && !stage.dirty) return;
+      if (!stage.dirty) return;
       stage.dirty = false;
       renderer.render(scene, stage.dims === 3 ? perspective : orthographic);
     };
@@ -231,19 +214,11 @@ export function StnScene({
       renderer.domElement.remove();
       stageRef.current = null;
     };
-    // onError is a callback prop; the stage must not be rebuilt when it changes.
+    // The stage is built once; theme and callbacks are applied by other effects.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The ground follows the theme without rebuilding the stage.
-  useEffect(() => {
-    const stage = stageRef.current;
-    if (stage === null) return;
-    stage.renderer.setClearColor(palette.canvas, 1);
-    stage.dirty = true;
-  }, [palette]);
-
-  // ---- camera: reset only for a new run, a 2D/3D switch, or the button ----
+  // ---- camera: reset for a new run, a 2D/3D switch, the button, a double-click
   useEffect(() => {
     const stage = stageRef.current;
     if (stage === null) return;
@@ -251,158 +226,135 @@ export function StnScene({
     stage.orbit.enabled = layout.dims === 3;
     stage.pan.enabled = layout.dims === 2;
 
-    // The old Plotly scene's default eye, (1.55, 1.45, 0.85), at a distance that
-    // holds the whole cube with a margin.
-    stage.orbit.target.set(0, 0, 0);
-    stage.perspective.position.set(1.55, 1.45, 0.85).normalize().multiplyScalar(4.6);
-    stage.perspective.lookAt(0, 0, 0);
-    stage.orbit.update();
+    const reset = () => {
+      stage.orbit.target.set(0, 0, 0);
+      stage.perspective.position.copy(EYE);
+      stage.perspective.lookAt(0, 0, 0);
+      stage.orbit.update();
+      stage.pan.target.set(0, 0, 0);
+      stage.orthographic.position.set(0, 0, 10);
+      stage.orthographic.zoom = 1;
+      stage.orthographic.updateProjectionMatrix();
+      stage.pan.update();
+      if (stage.box !== null) orientBox(stage.box, stage.perspective.position);
+      stage.dirty = true;
+    };
+    reset();
 
-    stage.pan.target.set(0, 0, 0);
-    stage.orthographic.position.set(0, 0, 10);
-    stage.orthographic.zoom = 1;
-    stage.orthographic.updateProjectionMatrix();
-    stage.pan.update();
-    stage.dirty = true;
+    const canvas = stage.renderer.domElement;
+    canvas.addEventListener("dblclick", reset);
+    return () => canvas.removeEventListener("dblclick", reset);
   }, [resetToken, layout.dims]);
 
-  // ---- the cube, floor grid and axis names --------------------------------
+  // ---- theme ground --------------------------------------------------------
   useEffect(() => {
     const stage = stageRef.current;
     if (stage === null) return;
-    disposeChildren(stage.frame);
-    if (is3d) {
-      const box = new THREE.LineSegments(
-        new THREE.EdgesGeometry(new THREE.BoxGeometry(2 * HALF, 2 * HALF, 2 * HALF)),
-        new THREE.LineBasicMaterial({ color: palette.rule, transparent: true, opacity: 0.9 }),
-      );
-      stage.frame.add(box);
-
-      const grid = new THREE.GridHelper(2 * HALF, 10, palette.grid, palette.grid);
-      grid.rotateX(Math.PI / 2); // GridHelper lies in XZ; the floor here is XY
-      grid.position.z = -HALF;
-      stage.frame.add(grid);
-
-      const [xName, yName, zName] = layout.provenance.axisLabels;
-      stage.frame.add(label(xName, [0, -HALF - 0.28, -HALF], palette.label));
-      stage.frame.add(label(yName, [HALF + 0.3, 0, -HALF], palette.label));
-      stage.frame.add(label(zName, [-HALF - 0.3, -HALF - 0.3, 0], palette.label));
-    }
-    stage.frame.visible = showFrame;
+    stage.renderer.setClearColor(palette.canvas, 1);
     stage.dirty = true;
-  }, [is3d, layout.provenance, showFrame, palette]);
+  }, [palette]);
+
+  // ---- the plot box: walls, grid, axis titles ------------------------------
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (stage === null) return;
+    if (stage.box !== null) {
+      disposeTree(stage.box.group);
+      stage.scene.remove(stage.box.group);
+      stage.box = null;
+    }
+    if (is3d) {
+      stage.box = buildBox(palette, layout.provenance.axisLabels);
+      stage.scene.add(stage.box.group);
+      orientBox(stage.box, stage.perspective.position);
+      stage.box.group.visible = showFrame;
+    }
+    stage.dirty = true;
+  }, [is3d, layout.provenance, palette, showFrame]);
 
   // ---- nodes, edges and migrations -----------------------------------------
   useEffect(() => {
     const stage = stageRef.current;
     if (stage === null) return;
     disposeChildren(stage.content);
+    const pixelRatio = stage.renderer.getPixelRatio();
 
-    // Node radius in cube units, from the cube root of visits as STN Analytics
-    // sizes them: a hot spot reads bigger without swamping the rest.
-    const base = (is3d ? 0.0145 : 0.0115) * nodeScale;
-    const radius = (i: number) => base * Math.cbrt(Math.max(payload.visits[i]!, 1));
-
-    const byKind: Record<Kind, number[]> = { sphere: [], shared: [], start: [], end: [], best: [] };
+    // Every node: one draw call, sized by visits in screen pixels as the old
+    // Plotly markers were (3 + 2.4 * visits^0.7 there, a little larger here, since
+    // shading reads better with a few more pixels to work with).
+    const nodePositions = new Float32Array(n * 3);
+    const nodeColours = new Float32Array(n * 3);
+    const nodeSizes = new Float32Array(n);
+    const nodeShapes = new Float32Array(n);
+    const islandRgb = palette.islands.map(cssToRgb);
     for (let i = 0; i < n; i += 1) {
+      nodePositions.set(fitted.subarray(i * 3, i * 3 + 3), i * 3);
+      const rgb = islandRgb[payload.islandId[i]! % islandRgb.length]!;
+      nodeColours.set(rgb, i * 3);
+      nodeSizes[i] = hiddenIslands.has(payload.islandId[i]!)
+        ? 0
+        : (5.5 + 2.4 * Math.pow(Math.min(payload.visits[i]!, 8), 0.7)) * nodeScale;
+    }
+    stage.content.add(pointCloud(nodePositions, nodeColours, nodeSizes, nodeShapes, pixelRatio, false));
+
+    // Where each island finished: the old app's gold diamonds, drawn on top so a
+    // marker is never lost inside the cloud. The one holding the best fitness in
+    // the run is drawn larger.
+    const finals: number[] = [];
+    for (let i = 0; i < n; i += 1) {
+      if ((payload.flags[i]! & NodeFlag.FinalBest) === 0) continue;
       if (hiddenIslands.has(payload.islandId[i]!)) continue;
-      byKind[kinds[i]!].push(i);
+      finals.push(i);
+    }
+    if (finals.length > 0) {
+      const gold = cssToRgb(palette.islandBest);
+      const positions = new Float32Array(finals.length * 3);
+      const colours = new Float32Array(finals.length * 3);
+      const sizes = new Float32Array(finals.length);
+      const shapes = new Float32Array(finals.length).fill(1);
+      finals.forEach((node, slot) => {
+        positions.set(fitted.subarray(node * 3, node * 3 + 3), slot * 3);
+        colours.set(gold, slot * 3);
+        sizes[slot] = (payload.fitness[node] === bestFitness ? 24 : 17) * Math.sqrt(nodeScale);
+      });
+      stage.content.add(pointCloud(positions, colours, sizes, shapes, pixelRatio, true));
     }
 
-    const sphere = new THREE.SphereGeometry(1, 14, 10);
-    const cube = new THREE.BoxGeometry(1.5, 1.5, 1.5);
-    // Cone tip up the fitness axis in 3D, up the screen in 2D.
-    const cone = new THREE.ConeGeometry(1.15, 2.5, 12);
-    if (is3d) cone.rotateX(Math.PI / 2);
-
-    const matrix = new THREE.Matrix4();
-    const colour = new THREE.Color();
-    const place = (
-      indices: number[],
-      geometry: THREE.BufferGeometry,
-      size: (i: number) => number,
-      tint: (i: number) => number,
-    ) => {
-      if (indices.length === 0) return;
-      const mesh = new THREE.InstancedMesh(
-        geometry,
-        new THREE.MeshLambertMaterial({ color: 0xffffff }),
-        indices.length,
-      );
-      indices.forEach((node, slot) => {
-        const s = size(node);
-        matrix.makeScale(s, s, s);
-        matrix.setPosition(fitted[node * 3]!, fitted[node * 3 + 1]!, fitted[node * 3 + 2]!);
-        mesh.setMatrixAt(slot, matrix);
-        mesh.setColorAt(slot, colour.setHex(tint(node)));
-      });
-      mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.instanceColor !== null) mesh.instanceColor.needsUpdate = true;
-      stage.content.add(mesh);
-    };
-
-    const { islands } = palette;
-    const islandTint = (i: number) => islands[payload.islandId[i]! % islands.length]!;
-    place(byKind.sphere, sphere, radius, islandTint);
-    place(byKind.shared, sphere, radius, () => palette.shared);
-    place(byKind.start, cube, (i) => Math.max(radius(i), base) * 1.25, () => palette.start);
-    place(byKind.end, cone, (i) => Math.max(radius(i), base) * 1.9, () => palette.end);
-    place(byKind.best, sphere, (i) => Math.max(radius(i), base) * 2.6, () => palette.best);
-
-    // Trajectory edges. On the dark ground they are additive, so a route the
-    // search re-walked burns brighter; on the light ground they lay down colour,
-    // since adding light to a pale ground only washes it out. Either way weight is
-    // baked into the vertex colour and exposure is the material's opacity, so
-    // dragging the slider never rebuilds a buffer.
-    const additive = palette.additiveEdges;
-    const linearIsland = islands.map((value) => new THREE.Color().setHex(value));
-    const ground = new THREE.Color().setHex(palette.canvas);
+    // Trajectory edges. Ordinary blending, low opacity, so dense regions settle
+    // at the island's colour instead of burning to white. Every edge is drawn;
+    // weight lifts an edge's alpha and the intensity control scales them all.
     const count = payload.edgeSource.length;
     const edgePositions = new Float32Array(count * 6);
-    const edgeColours = new Float32Array(count * 6);
+    const edgeColours = new Float32Array(count * 8);
     let written = 0;
+    const tint = new THREE.Color();
     for (let e = 0; e < count; e += 1) {
       const a = payload.edgeSource[e]!;
       const b = payload.edgeTarget[e]!;
       const island = payload.islandId[a]!;
       if (hiddenIslands.has(island)) continue;
-      // Colours are converted to linear light first: three.js accumulates and
-      // blends in linear space, so a raw sRGB weight lands several times
-      // brighter than intended and the core washes out to white.
-      const tint = linearIsland[island % linearIsland.length]!;
-      const intensity = Math.min(1, (additive ? 0.35 : 0.7) + 0.25 * (payload.edgeWeight[e]! - 1));
-      // Additive: dim toward black. Laid down: fade toward the ground, so a
-      // light edge is quiet and a heavy one reads in full colour.
-      const r = additive ? tint.r * intensity : ground.r + (tint.r - ground.r) * intensity;
-      const g = additive ? tint.g * intensity : ground.g + (tint.g - ground.g) * intensity;
-      const bl = additive ? tint.b * intensity : ground.b + (tint.b - ground.b) * intensity;
+      tint.set(palette.islands[island % palette.islands.length]!);
+      const alpha = Math.min(1, 1 + 0.9 * (payload.edgeWeight[e]! - 1));
       for (let end = 0; end < 2; end += 1) {
         const node = end === 0 ? a : b;
-        const at = written * 6 + end * 3;
-        edgePositions[at] = fitted[node * 3]!;
-        edgePositions[at + 1] = fitted[node * 3 + 1]!;
-        edgePositions[at + 2] = fitted[node * 3 + 2]!;
-        edgeColours[at] = r;
-        edgeColours[at + 1] = g;
-        edgeColours[at + 2] = bl;
+        edgePositions.set(fitted.subarray(node * 3, node * 3 + 3), written * 6 + end * 3);
+        edgeColours.set([tint.r, tint.g, tint.b, alpha], written * 8 + end * 4);
       }
       written += 1;
     }
     const edgeGeometry = new THREE.BufferGeometry();
     edgeGeometry.setAttribute("position", new THREE.BufferAttribute(edgePositions.subarray(0, written * 6), 3));
-    edgeGeometry.setAttribute("color", new THREE.BufferAttribute(edgeColours.subarray(0, written * 6), 3));
+    edgeGeometry.setAttribute("color", new THREE.BufferAttribute(edgeColours.subarray(0, written * 8), 4));
     const edgeMaterial = new THREE.LineBasicMaterial({
       vertexColors: true,
       transparent: true,
-      blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
       depthWrite: false,
-      opacity: edgeOpacity(exposure, additive),
+      opacity: Math.min(1, palette.edgeOpacity * edgeIntensity),
     });
     edgeMaterialRef.current = edgeMaterial;
     stage.content.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
 
-    // Migrations stay out of the additive field -- magenta is reserved for them,
-    // and a field that blends hues would let a dense region drift pink.
+    // Migrations stay a separate layer in the reserved magenta.
     const migrationPositions: number[] = [];
     for (let m = 0; m < payload.migrationSource.length; m += 1) {
       const a = payload.migrationSource[m]!;
@@ -417,24 +369,25 @@ export function StnScene({
     migrationGeometry.setAttribute("position", new THREE.Float32BufferAttribute(migrationPositions, 3));
     const migrations = new THREE.LineSegments(
       migrationGeometry,
-      new THREE.LineBasicMaterial({ color: palette.migration, transparent: true, opacity: 0.85, depthWrite: false }),
+      new THREE.LineBasicMaterial({ color: palette.migration, transparent: true, opacity: 0.8, depthWrite: false }),
     );
+    migrations.renderOrder = 5;
     migrations.visible = showMigrations;
     migrationRef.current = migrations;
     stage.content.add(migrations);
 
     stage.dirty = true;
-    // exposure and showMigrations are applied by their own cheap effects below.
+    // edgeIntensity and showMigrations are applied by their own cheap effects.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [payload, fitted, kinds, hiddenIslands, nodeScale, is3d, n, palette]);
+  }, [payload, fitted, hiddenIslands, nodeScale, n, palette, bestFitness]);
 
   useEffect(() => {
     const material = edgeMaterialRef.current;
     const stage = stageRef.current;
     if (material === null || stage === null) return;
-    material.opacity = edgeOpacity(exposure, palette.additiveEdges);
+    material.opacity = Math.min(1, palette.edgeOpacity * edgeIntensity);
     stage.dirty = true;
-  }, [exposure, palette]);
+  }, [edgeIntensity, palette]);
 
   useEffect(() => {
     const migrations = migrationRef.current;
@@ -447,35 +400,207 @@ export function StnScene({
   return <div ref={hostRef} style={{ position: "absolute", inset: "0" }} />;
 }
 
-/** Lower exposure burns more of the field in; the curve keeps the slider useful. */
-function edgeOpacity(exposure: number, additive: boolean): number {
-  return additive
-    ? Math.min(1, Math.max(0.004, 0.06 / exposure))
-    : Math.min(1, Math.max(0.02, 0.26 / exposure));
+// ---------------------------------------------------------------------------
+// Nodes: shaded balls and diamonds from a point shader
+// ---------------------------------------------------------------------------
+
+const POINT_VERTEX = /* glsl */ `
+  attribute vec3 colour;
+  attribute float size;
+  attribute float shape;
+  uniform float pixelRatio;
+  varying vec3 vColour;
+  varying float vShape;
+  varying float vSize;
+  void main() {
+    vColour = colour;
+    vShape = shape;
+    vSize = size * pixelRatio;
+    gl_PointSize = vSize;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+/*
+ * Colours arrive and leave as sRGB: this material writes straight to the
+ * canvas, so what is in palette.ts is exactly what appears on screen.
+ */
+const POINT_FRAGMENT = /* glsl */ `
+  varying vec3 vColour;
+  varying float vShape;
+  varying float vSize;
+  void main() {
+    if (vSize < 0.5) discard;
+    vec2 p = gl_PointCoord * 2.0 - 1.0;
+    p.y = -p.y;
+    float edge = vShape < 0.5 ? length(p) : abs(p.x) + abs(p.y);
+    if (edge > 1.0) discard;
+
+    // About one device pixel of edge, in a darker shade of the node's own
+    // colour: enough to separate overlapping nodes without turning a small one
+    // into a hollow ring.
+    if (edge > 1.0 - 2.0 / max(vSize, 1.0)) {
+      gl_FragColor = vec4(vColour * 0.42, 1.0);
+      return;
+    }
+
+    // Light from the upper left, as if each point were a small sphere.
+    vec3 normal = vShape < 0.5
+      ? vec3(p, sqrt(max(0.0, 1.0 - dot(p, p))))
+      : normalize(vec3(p * 0.6, 1.0));
+    vec3 light = normalize(vec3(-0.45, 0.55, 0.75));
+    float diffuse = max(dot(normal, light), 0.0);
+    float shine = pow(max(dot(reflect(-light, normal), vec3(0.0, 0.0, 1.0)), 0.0), 24.0);
+    vec3 colour = vColour * (0.52 + 0.58 * diffuse) + vec3(0.22) * shine;
+    gl_FragColor = vec4(min(colour, vec3(1.0)), 1.0);
+  }
+`;
+
+function pointCloud(
+  positions: Float32Array,
+  colours: Float32Array,
+  sizes: Float32Array,
+  shapes: Float32Array,
+  pixelRatio: number,
+  onTop: boolean,
+): THREE.Points {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("colour", new THREE.BufferAttribute(colours, 3));
+  geometry.setAttribute("size", new THREE.BufferAttribute(sizes, 1));
+  geometry.setAttribute("shape", new THREE.BufferAttribute(shapes, 1));
+  const material = new THREE.ShaderMaterial({
+    vertexShader: POINT_VERTEX,
+    fragmentShader: POINT_FRAGMENT,
+    uniforms: {
+      pixelRatio: { value: pixelRatio },
+    },
+    depthTest: !onTop,
+  });
+  const points = new THREE.Points(geometry, material);
+  if (onTop) points.renderOrder = 10;
+  return points;
 }
 
-/** A camera-facing text label, sized in world units so it shrinks with distance. */
-function label(text: string, at: [number, number, number], colour: string): THREE.Sprite {
+/** "#RRGGBB" to [r, g, b] in 0..1, left in sRGB. */
+function cssToRgb(css: string): [number, number, number] {
+  const value = Number.parseInt(css.slice(1), 16);
+  return [((value >> 16) & 255) / 255, ((value >> 8) & 255) / 255, (value & 255) / 255];
+}
+
+// ---------------------------------------------------------------------------
+// The plot box
+// ---------------------------------------------------------------------------
+
+const GRID_DIVISIONS = 6;
+
+/**
+ * Two candidate walls per axis, one at each end. `orientBox` shows the one on
+ * the far side of the camera, so the grid is always behind the data.
+ */
+function buildBox(palette: ScenePalette, axisLabels: readonly [string, string, string]): BoxParts {
+  const group = new THREE.Group();
+  const walls: THREE.Object3D[][] = [[], [], []];
+
+  const fill = new THREE.MeshBasicMaterial({
+    color: palette.wall,
+    transparent: true,
+    opacity: palette.wallOpacity,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const gridMaterial = new THREE.LineBasicMaterial({ color: palette.grid });
+  const borderMaterial = new THREE.LineBasicMaterial({ color: palette.rule });
+
+  for (let axis = 0; axis < 3; axis += 1) {
+    for (let side = 0; side < 2; side += 1) {
+      const wall = new THREE.Group();
+
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF, 2 * HALF), fill);
+      plane.renderOrder = -2;
+      wall.add(plane);
+
+      const lines: number[] = [];
+      for (let k = 1; k < GRID_DIVISIONS; k += 1) {
+        const t = -HALF + (2 * HALF * k) / GRID_DIVISIONS;
+        lines.push(t, -HALF, 0, t, HALF, 0, -HALF, t, 0, HALF, t, 0);
+      }
+      const grid = new THREE.LineSegments(
+        new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(lines, 3)),
+        gridMaterial,
+      );
+      grid.renderOrder = -1;
+      wall.add(grid);
+
+      const border = new THREE.LineSegments(
+        new THREE.EdgesGeometry(new THREE.PlaneGeometry(2 * HALF, 2 * HALF)),
+        borderMaterial,
+      );
+      border.renderOrder = -1;
+      wall.add(border);
+
+      // A wall is built in the XY plane; turn it to face its axis.
+      const offset = side === 0 ? -HALF : HALF;
+      if (axis === 0) {
+        wall.rotation.y = Math.PI / 2;
+        wall.position.x = offset;
+      } else if (axis === 1) {
+        wall.rotation.x = Math.PI / 2;
+        wall.position.y = offset;
+      } else {
+        wall.position.z = offset;
+      }
+      walls[axis]!.push(wall);
+      group.add(wall);
+    }
+  }
+
+  const titles = axisLabels.map((text) => {
+    const sprite = label(text, palette.label);
+    group.add(sprite);
+    return sprite;
+  });
+
+  return { group, walls, titles };
+}
+
+/** Show the walls behind the data and put the axis titles on the near edges. */
+function orientBox(box: BoxParts, camera: THREE.Vector3): void {
+  const side = [camera.x >= 0 ? 1 : -1, camera.y >= 0 ? 1 : -1, camera.z >= 0 ? 1 : -1] as const;
+  for (let axis = 0; axis < 3; axis += 1) {
+    // Far wall: at -1 when the camera is on the + side.
+    const far = side[axis]! > 0 ? 0 : 1;
+    box.walls[axis]![far]!.visible = true;
+    box.walls[axis]![1 - far]!.visible = false;
+  }
+  const [xTitle, yTitle, zTitle] = box.titles;
+  const out = 1.34 * HALF;
+  xTitle?.position.set(0, side[1] * out, -side[2] * HALF);
+  yTitle?.position.set(side[0] * out, 0, -side[2] * HALF);
+  zTitle?.position.set(side[0] * out, -side[1] * out, 0);
+}
+
+/** A camera-facing text label, drawn over everything so it is never hidden. */
+function label(text: string, colour: string): THREE.Sprite {
   const canvas = document.createElement("canvas");
-  canvas.width = 512;
+  canvas.width = 640;
   canvas.height = 96;
   const context = canvas.getContext("2d");
   if (context !== null) {
-    context.font = '500 34px Archivo, "Segoe UI", sans-serif';
+    context.font = '500 36px Archivo, "Segoe UI", sans-serif';
     context.fillStyle = colour;
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.fillText(text, 256, 48);
+    context.fillText(text, 320, 48);
   }
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
   const sprite = new THREE.Sprite(
-    // Always on top: a label hidden behind the cloud is no label at all.
     new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, depthTest: false }),
   );
-  sprite.renderOrder = 10;
-  sprite.scale.set(1.2, 0.225, 1);
-  sprite.position.set(...at);
+  sprite.renderOrder = 20;
+  sprite.scale.set(0.9, 0.135, 1);
   return sprite;
 }
 
@@ -487,14 +612,20 @@ function disposeChildren(group: THREE.Object3D): void {
 }
 
 function disposeTree(root: THREE.Object3D): void {
+  const seen = new Set<unknown>();
   root.traverse((object) => {
     const mesh = object as THREE.Mesh;
-    mesh.geometry?.dispose();
+    if (mesh.geometry !== undefined && !seen.has(mesh.geometry)) {
+      seen.add(mesh.geometry);
+      mesh.geometry.dispose();
+    }
     const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
-    if (Array.isArray(material)) material.forEach((m) => m.dispose());
-    else if (material !== undefined) {
-      (material as THREE.SpriteMaterial).map?.dispose();
-      material.dispose();
+    const list = Array.isArray(material) ? material : material !== undefined ? [material] : [];
+    for (const m of list) {
+      if (seen.has(m)) continue;
+      seen.add(m);
+      (m as THREE.SpriteMaterial).map?.dispose();
+      m.dispose();
     }
   });
 }

@@ -12,22 +12,21 @@
 export type ThemeName = "dark" | "light";
 
 export interface ScenePalette {
+  /** Clear colour behind everything. */
   canvas: number;
-  rule: number;
+  /** The three back walls of the plot box, as Plotly drew them. */
+  wall: number;
+  wallOpacity: number;
   grid: number;
+  rule: number;
   label: string;
-  islands: readonly number[];
-  start: number;
-  end: number;
-  best: number;
-  shared: number;
+  /** Node colours, as CSS hex -- the node shader writes them straight out. */
+  islands: readonly string[];
+  /** Where each island finished: the old app's gold diamond. */
+  islandBest: string;
   migration: number;
-  /**
-   * Edges on a dark ground add light, so dense routes glow. On a light ground
-   * adding light only washes toward white, so edges there lay down colour with
-   * ordinary blending instead.
-   */
-  additiveEdges: boolean;
+  /** Trajectory edge opacity at intensity 1. */
+  edgeOpacity: number;
 }
 
 export const ISLAND_CSS: Record<ThemeName, readonly string[]> = {
@@ -35,33 +34,29 @@ export const ISLAND_CSS: Record<ThemeName, readonly string[]> = {
   light: ["#23877A", "#C06E17", "#3A68BA", "#8550B3", "#4A8B2D", "#BD4439"],
 };
 
-const hex = (css: string) => Number.parseInt(css.slice(1), 16);
-
 export const SCENE: Record<ThemeName, ScenePalette> = {
   dark: {
     canvas: 0x08171f,
-    rule: 0x244251,
-    grid: 0x16303c,
-    label: "#708a91",
-    islands: ISLAND_CSS.dark.map(hex),
-    start: 0xfbbf24, // STN Analytics' start box
-    end: 0xdde8e9, // STN draws ends dark; on a dark ground that vanishes, so ink
-    best: 0xef4444, // STN's best node
-    shared: 0x9aa7ad,
+    wall: 0x0e2530,
+    wallOpacity: 0.6,
+    grid: 0x1e3b48,
+    rule: 0x2b4d5d,
+    label: "#8aa3a9",
+    islands: ISLAND_CSS.dark,
+    islandBest: "#FFD166",
     migration: 0xff4d9d,
-    additiveEdges: true,
+    edgeOpacity: 0.07,
   },
   light: {
     canvas: 0xdde8e9,
-    rule: 0xa9bec1,
-    grid: 0xc6d6d8,
-    label: "#5a7178",
-    islands: ISLAND_CSS.light.map(hex),
-    start: 0xd99a0e,
-    end: 0x0c2630, // STN's own light-mode end colour: dark
-    best: 0xd23434,
-    shared: 0x74878d,
+    wall: 0xcddbdd,
+    wallOpacity: 0.7,
+    grid: 0xb6c9cc,
+    rule: 0xa3b9bc,
+    label: "#4f666d",
+    islands: ISLAND_CSS.light,
+    islandBest: "#C58A0A",
     migration: 0xcc2d77,
-    additiveEdges: false,
+    edgeOpacity: 0.075,
   },
 };

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  BrandMark, ChevronIcon, EyeIcon, InfoIcon, MoonIcon, ResetIcon, SunIcon,
+  BrandMark, ChevronIcon, InfoIcon, MoonIcon, ResetIcon, SlidersIcon, SunIcon,
 } from "./components/icons.js";
 import type {
   LayoutKind, LayoutOptions, LayoutPayload, StnPayload, WorkerRequest, WorkerResponse,
@@ -34,6 +34,16 @@ function useTheme(): [ThemeName, () => void] {
   return [theme, toggle];
 }
 
+/**
+ * One screen, picture first.
+ *
+ * The earlier shell spread every control, count and caveat across a sidebar and
+ * four stat cards, and the result read as a dashboard with a plot in it. This
+ * follows the old Plotly view instead: the scene fills the window, the counts
+ * are one line of text, every option sits behind a single View button, and the
+ * legend is also the island filter -- click an island to hide it, as Plotly's
+ * legend did.
+ */
 export default function App() {
   const [theme, toggleTheme] = useTheme();
 
@@ -45,21 +55,19 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
 
   // Defaults reproduce the view the platform already had: the genome-space
-  // projection, fitness on the vertical, islands overlaid. The graph layout and
-  // the island footprints are offered, not imposed -- the base is the real
-  // picture, improved only in how clearly it is drawn.
+  // projection, fitness on the vertical, islands overlaid.
   const [layoutKind, setLayoutKind] = useState<LayoutKind>("pca");
   const [elevation, setElevation] = useState(true);
   const [territories, setTerritories] = useState(false);
   const [rankFitness, setRankFitness] = useState(true);
 
-  // Shown as intensity (right is brighter) and handed to the scene as exposure.
-  const [intensity, setIntensity] = useState(1);
+  const [edgeIntensity, setEdgeIntensity] = useState(1);
+  const [nodeScale, setNodeScale] = useState(1);
   const [showMigrations, setShowMigrations] = useState(true);
   const [showFrame, setShowFrame] = useState(true);
-  const [nodeScale, setNodeScale] = useState(1);
-  const [resetCount, setResetCount] = useState(0);
   const [hiddenIslands, setHiddenIslands] = useState<ReadonlySet<number>>(new Set());
+  const [resetCount, setResetCount] = useState(0);
+  const [viewOpen, setViewOpen] = useState(false);
 
   const workerRef = useRef<Worker | null>(null);
 
@@ -101,7 +109,7 @@ export default function App() {
         setPhase(null);
       } else if (message.type === "layout") {
         // A new projection of the same run: the camera stays where the user left
-        // it, so toggling a control never throws the view somewhere else.
+        // it, so changing an option never throws the view somewhere else.
         setLayout(message.layout);
         setPhase(null);
       } else {
@@ -118,8 +126,7 @@ export default function App() {
     };
   }, [runId]);
 
-  // Re-project when the layout choice changes. The network itself is not rebuilt,
-  // so this is a projection, not a reload.
+  // Re-project when a layout option changes. The network is not rebuilt.
   const settled = useRef(false);
   useEffect(() => {
     if (!settled.current) {
@@ -143,6 +150,15 @@ export default function App() {
     });
   }, []);
 
+  /** Plotly's double-click-in-legend: show only this island, or everything again. */
+  const isolateIsland = useCallback((island: number) => {
+    if (payload === null) return;
+    setHiddenIslands((current) => {
+      const alone = current.size === payload.islands.length - 1 && !current.has(island);
+      return alone ? new Set() : new Set(payload.islands.filter((i) => i !== island));
+    });
+  }, [payload]);
+
   const islandCounts = useMemo(() => {
     const counts = new Map<number, number>();
     if (payload === null) return counts;
@@ -150,59 +166,40 @@ export default function App() {
     return counts;
   }, [payload]);
 
-  const honesty = layout?.provenance.honesty;
-
   /**
-   * Migration edges with no length.
-   *
-   * A migration copies an individual, so both endpoints hold the *same genome*
-   * and — in the search-space projection — land on the same point. Only the
-   * island differs. So the count can say hundreds of routes while the plot shows
-   * none, which reads as a bug in the data rather than what it is: a property of
-   * the projection. Island grouping pulls the islands apart and gives the edges
-   * somewhere to span; the graph layout gives every one of them length by
-   * construction, because there position comes from structure.
+   * Migration routes with no length. A migration copies an individual, so both
+   * ends hold the same genome and -- in the search-space projection -- land on
+   * the same point. Island grouping or the graph layout gives them length.
    */
   const flatMigrations = useMemo(() => {
     if (payload === null || layout === null) return 0;
     const { positions } = layout;
     let flat = 0;
     for (let i = 0; i < payload.migrationSource.length; i += 1) {
-      const a = payload.migrationSource[i]!;
-      const b = payload.migrationTarget[i]!;
-      if (
-        positions[a * 3] === positions[b * 3] &&
-        positions[a * 3 + 1] === positions[b * 3 + 1] &&
-        positions[a * 3 + 2] === positions[b * 3 + 2]
-      ) {
-        flat += 1;
-      }
+      const a = payload.migrationSource[i]! * 3;
+      const b = payload.migrationTarget[i]! * 3;
+      if (positions[a] === positions[b] && positions[a + 1] === positions[b + 1]
+        && positions[a + 2] === positions[b + 2]) flat += 1;
     }
     return flat;
   }, [payload, layout]);
 
-  const stats = useMemo(() => {
-    if (payload === null) return null;
-    return [
-      { label: "Nodes", value: payload.nodeCount.toLocaleString(), note: `${payload.islands.length} islands` },
-      { label: "Trajectory edges", value: payload.edgeSource.length.toLocaleString(), note: "within islands" },
-      {
-        label: "Migration routes",
-        value: payload.migrationSource.length.toLocaleString(),
-        note: `from ${payload.transferEvents.toLocaleString()} transfers`,
-      },
-      honesty !== undefined
-        ? {
-            label: "Variance kept",
-            value: `${Math.round(honesty.retainedVariance * 100)}%`,
-            note: "of the genome's spread",
-          }
-        : { label: "Layout", value: "Graph", note: "position from structure" },
-    ];
-  }, [payload, honesty]);
-
-  const lowVariance = honesty !== undefined && honesty.retainedVariance < 0.5;
+  const honesty = layout?.provenance.honesty;
   const islandHex = ISLAND_CSS[theme];
+
+  const caveats: string[] = [];
+  if (honesty !== undefined && honesty.retainedVariance < 0.5) {
+    caveats.push(
+      `The projection keeps ${Math.round(honesty.retainedVariance * 100)}% of the genome's variance, `
+      + "so read the structure, not the distances.",
+    );
+  }
+  if (flatMigrations > 0 && showMigrations) {
+    caveats.push(
+      `${flatMigrations.toLocaleString()} migration routes have zero length here, because both ends `
+      + "hold the same genome. Island grouping or the graph layout shows them.",
+    );
+  }
 
   return (
     <div className="app">
@@ -210,20 +207,19 @@ export default function App() {
         <div className="brand">
           <BrandMark />
           <span className="brand-name">Archipelago</span>
-          <span className="pill">v0.5</span>
         </div>
-        <span className="crumb">Search trajectory network</span>
+
+        <label className="picker">
+          <span className="sr-only">Run</span>
+          <select value={runId ?? ""} onChange={(e) => setRunId(e.target.value)}>
+            {runs.map((id) => (
+              <option key={id} value={id}>{id}</option>
+            ))}
+          </select>
+          <ChevronIcon size={14} />
+        </label>
 
         <div className="topbar-right">
-          <label className="picker">
-            <span className="picker-label">Run</span>
-            <select value={runId ?? ""} onChange={(e) => setRunId(e.target.value)}>
-              {runs.map((id) => (
-                <option key={id} value={id}>{id}</option>
-              ))}
-            </select>
-            <ChevronIcon size={14} />
-          </label>
           <button
             className="icon-btn"
             onClick={toggleTheme}
@@ -235,10 +231,60 @@ export default function App() {
         </div>
       </header>
 
-      <div className="body">
-        <aside className="sidebar">
-          <section className="section">
-            <h2 className="section-title">Layout</h2>
+      <main className="stage">
+        {payload !== null && layout !== null && (
+          <StnScene
+            payload={payload}
+            layout={layout}
+            edgeIntensity={edgeIntensity}
+            nodeScale={nodeScale}
+            showMigrations={showMigrations}
+            showFrame={showFrame}
+            hiddenIslands={hiddenIslands}
+            theme={theme}
+            resetToken={`${runId ?? ""}:${resetCount}`}
+            onError={(message) => setError(`Graphics: ${message}`)}
+          />
+        )}
+
+        {payload !== null && (
+          <div className="summary">
+            <span><b>{payload.nodeCount.toLocaleString()}</b> locations</span>
+            <span><b>{payload.edgeSource.length.toLocaleString()}</b> steps</span>
+            <span><b>{payload.migrationSource.length.toLocaleString()}</b> migration routes</span>
+            {honesty !== undefined && (
+              <span><b>{Math.round(honesty.retainedVariance * 100)}%</b> variance kept</span>
+            )}
+            {caveats.length > 0 && (
+              <span className="caveat" tabIndex={0}>
+                <InfoIcon size={14} />
+                <span className="caveat-text">
+                  {caveats.map((text) => <span key={text}>{text}</span>)}
+                </span>
+              </span>
+            )}
+          </div>
+        )}
+
+        {payload !== null && (
+          <div className="actions">
+            <button onClick={() => setResetCount((c) => c + 1)} title="Reset the camera (or double-click the view)">
+              <ResetIcon size={14} />
+              Reset
+            </button>
+            <button
+              aria-expanded={viewOpen}
+              className={viewOpen ? "is-open" : ""}
+              onClick={() => setViewOpen((open) => !open)}
+            >
+              <SlidersIcon size={14} />
+              View
+            </button>
+          </div>
+        )}
+
+        {viewOpen && payload !== null && (
+          <ViewPanel onClose={() => setViewOpen(false)}>
             <div className="seg" role="group" aria-label="Layout">
               <button aria-pressed={layoutKind === "pca"} onClick={() => setLayoutKind("pca")}>
                 Search space
@@ -247,182 +293,106 @@ export default function App() {
                 Graph structure
               </button>
             </div>
-            <p className="helper">
-              {layoutKind === "pca"
-                ? "Placed by where each location sits in search space. Height is fitness, so convergence reads as descent."
-                : "Placed by the network: left to right is how far into the run, up and down is what connects to what."}
-            </p>
-          </section>
 
-          {layoutKind === "pca" && (
-            <section className="section">
-              <h2 className="section-title">Projection</h2>
-              <Switch label="Fitness as height" checked={elevation} onChange={setElevation} />
-              {elevation && (
-                <Switch
-                  label="Even height"
-                  hint="Spread skewed fitness by rank"
-                  checked={rankFitness}
-                  onChange={setRankFitness}
-                />
-              )}
-              <Switch
-                label="Island grouping"
-                hint="Give each island its own footprint"
-                checked={territories}
-                onChange={setTerritories}
-              />
-            </section>
-          )}
-
-          <section className="section">
-            <h2 className="section-title">Display</h2>
-            <Slider
-              label="Edge intensity" min={0.2} max={4} step={0.05}
-              value={intensity} onChange={setIntensity}
-            />
-            <Slider
-              label="Node size" min={0.4} max={2.5} step={0.05}
-              value={nodeScale} onChange={setNodeScale}
-            />
-            <Switch label="Migrations" checked={showMigrations} onChange={setShowMigrations} />
-            {layout?.dims === 3 && (
-              <Switch label="Frame and axes" checked={showFrame} onChange={setShowFrame} />
-            )}
-          </section>
-
-          {payload !== null && (
-            <section className="section">
-              <h2 className="section-title">
-                Islands
-                {hiddenIslands.size > 0 && (
-                  <button className="text-btn" onClick={() => setHiddenIslands(new Set())}>
-                    Show all
-                  </button>
+            {layoutKind === "pca" && (
+              <div className="group">
+                <Switch label="Fitness as height" checked={elevation} onChange={setElevation} />
+                {elevation && (
+                  <Switch label="Even height" hint="Spread skewed fitness by rank"
+                    checked={rankFitness} onChange={setRankFitness} />
                 )}
-              </h2>
-              <div className="islands">
-                {payload.islands.map((island) => {
-                  const hidden = hiddenIslands.has(island);
-                  return (
-                    <button
-                      key={island}
-                      className="island"
-                      aria-pressed={!hidden}
-                      onClick={() => toggleIsland(island)}
-                      style={{ ["--dot" as string]: islandHex[island % islandHex.length] }}
-                    >
-                      <span className="dot" />
-                      <span className="island-name">Island {island}</span>
-                      <span className="island-count">
-                        {(islandCounts.get(island) ?? 0).toLocaleString()}
-                      </span>
-                    </button>
-                  );
-                })}
+                <Switch label="Island grouping" hint="Each island in its own footprint"
+                  checked={territories} onChange={setTerritories} />
               </div>
-            </section>
-          )}
+            )}
 
-          {(lowVariance || (flatMigrations > 0 && showMigrations)) && (
-            <section className="section">
-              <h2 className="section-title">Reading this view</h2>
-              {lowVariance && (
-                <div className="note">
-                  <InfoIcon size={15} />
-                  <p>
-                    The projection keeps <b>{Math.round((honesty?.retainedVariance ?? 0) * 100)}%</b> of
-                    the variance, so read the structure, not the spacing. That is a property
-                    of the space, not the run.
-                  </p>
-                </div>
-              )}
-              {flatMigrations > 0 && showMigrations && (
-                <div className="note note-warn">
-                  <InfoIcon size={15} />
-                  <p>
-                    <b>{flatMigrations.toLocaleString()}</b> migration routes have zero length
-                    here: both ends hold the same genome. Turn on island grouping, or use
-                    graph structure, to see them.
-                  </p>
-                </div>
-              )}
-            </section>
-          )}
-        </aside>
+            <div className="group">
+              <Slider label="Edges" min={0} max={4} step={0.05}
+                value={edgeIntensity} onChange={setEdgeIntensity} />
+              <Slider label="Nodes" min={0.5} max={2} step={0.05}
+                value={nodeScale} onChange={setNodeScale} />
+            </div>
 
-        <main className="stage">
-          {stats !== null && (
-            <div className="stats">
-              {stats.map((s) => (
-                <div className="stat" key={s.label}>
-                  <div className="stat-label">{s.label}</div>
-                  <div className="stat-value">{s.value}</div>
-                  <div className="stat-note">{s.note}</div>
-                </div>
+            <div className="group">
+              <Switch label="Migrations" checked={showMigrations} onChange={setShowMigrations} />
+              {layout?.dims === 3 && (
+                <Switch label="Box and axes" checked={showFrame} onChange={setShowFrame} />
+              )}
+            </div>
+          </ViewPanel>
+        )}
+
+        {payload !== null && (
+          <div className="legend">
+            <div className="legend-islands" role="group" aria-label="Islands">
+              {payload.islands.map((island) => (
+                <button
+                  key={island}
+                  aria-pressed={!hiddenIslands.has(island)}
+                  onClick={() => toggleIsland(island)}
+                  onDoubleClick={() => isolateIsland(island)}
+                  title="Click to hide · double-click to show only this island"
+                  style={{ ["--dot" as string]: islandHex[island % islandHex.length] }}
+                >
+                  <i className="dot" />
+                  Island {island}
+                  <span className="count">{(islandCounts.get(island) ?? 0).toLocaleString()}</span>
+                </button>
               ))}
             </div>
-          )}
-
-          <div className="canvas">
-            {payload !== null && layout !== null && (
-              <StnScene
-                payload={payload}
-                layout={layout}
-                exposure={1 / intensity}
-                nodeScale={nodeScale}
-                showMigrations={showMigrations}
-                showFrame={showFrame}
-                hiddenIslands={hiddenIslands}
-                theme={theme}
-                resetToken={`${runId ?? ""}:${resetCount}`}
-                onError={(message) => setError(`Graphics: ${message}`)}
-              />
-            )}
-
-            {payload !== null && (
-              <div className="toolbar">
-                <button onClick={() => setResetCount((c) => c + 1)} title="Reset the camera">
-                  <ResetIcon size={14} />
-                  Reset view
-                </button>
-              </div>
-            )}
-
-            {payload !== null && (
-              <div className="legend" aria-label="Legend">
-                <span><i className="glyph glyph-sphere" />Location, by island</span>
-                <span><i className="glyph glyph-start" />Trajectory start</span>
-                <span><i className="glyph glyph-end" />Where an island finished</span>
-                <span><i className="glyph glyph-best" />Best found</span>
-                <span><i className="glyph glyph-shared" />Reached by several islands</span>
-                <span><i className="glyph glyph-migration" />Migration</span>
-              </div>
-            )}
-
-            {payload !== null && (
-              <div className="hint">
-                <EyeIcon size={13} />
-                {layout?.dims === 3 ? "Drag to orbit · scroll to zoom" : "Drag to pan · scroll to zoom"}
-              </div>
-            )}
-
-            {phase !== null && (
-              <div className="overlay">
-                <div className="overlay-card">
-                  <div className="spinner" />
-                  <span>{phase.charAt(0).toUpperCase() + phase.slice(1)}…</span>
-                </div>
-              </div>
-            )}
-            {error !== null && (
-              <div className="overlay">
-                <div className="overlay-card overlay-error">{error}</div>
-              </div>
-            )}
+            <div className="legend-marks">
+              <span><i className="mark-diamond" />Where each island finished</span>
+              {showMigrations && <span><i className="mark-line" />Migration</span>}
+            </div>
           </div>
-        </main>
-      </div>
+        )}
+
+        {payload !== null && (
+          <div className="hint">
+            {layout?.dims === 3
+              ? "Drag to turn · scroll to zoom · double-click to reset"
+              : "Drag to pan · scroll to zoom · double-click to reset"}
+          </div>
+        )}
+
+        {phase !== null && (
+          <div className="overlay">
+            <div className="overlay-card">
+              <div className="spinner" />
+              <span>{phase.charAt(0).toUpperCase() + phase.slice(1)}…</span>
+            </div>
+          </div>
+        )}
+        {error !== null && (
+          <div className="overlay">
+            <div className="overlay-card overlay-error">{error}</div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+/** A floating panel that closes on Escape or a click outside it. */
+function ViewPanel({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    const onPointer = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (ref.current?.contains(target) || target?.closest(".actions") !== null) return;
+      onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", onPointer);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", onPointer);
+    };
+  }, [onClose]);
+  return (
+    <div className="panel" ref={ref} role="dialog" aria-label="View options">
+      {children}
     </div>
   );
 }
@@ -438,7 +408,7 @@ function Switch({
   return (
     <label className="row">
       <span className="row-text">
-        <span className="row-label">{label}</span>
+        <span>{label}</span>
         {hint !== undefined && <span className="row-hint">{hint}</span>}
       </span>
       <input
@@ -462,15 +432,13 @@ function Slider({
   const fill = `${((value - min) / (max - min)) * 100}%`;
   return (
     <label className="slider">
-      <span className="slider-head">
-        <span className="row-label">{label}</span>
-        <span className="slider-value">{value.toFixed(2)}×</span>
-      </span>
+      <span>{label}</span>
       <input
         type="range" className="range" min={min} max={max} step={step} value={value}
         style={{ ["--fill" as string]: fill }}
         onChange={(e) => onChange(Number(e.target.value))}
       />
+      <span className="slider-value">{value.toFixed(1)}×</span>
     </label>
   );
 }

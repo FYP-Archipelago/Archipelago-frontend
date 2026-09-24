@@ -72,11 +72,12 @@ export function InfoIcon(props: IconProps) {
   );
 }
 
-export function EyeIcon(props: IconProps) {
+export function SlidersIcon(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
-      <circle cx="12" cy="12" r="3" />
+      <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
+      <circle cx="16" cy="7" r="2" />
+      <circle cx="10" cy="17" r="2" />
     </Svg>
   );
 }
