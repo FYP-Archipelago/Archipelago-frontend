@@ -20,6 +20,27 @@ own scroll container and grows the viewport to match before shooting.
 
 ---
 
+## v0.5 — TypeScript, and a view that holds still
+
+The rewrite under `web/`. Six pages, the same as v0.4, plus a light theme.
+Captured 1600 × 940 on the same fully-connected sample run.
+
+| | Page | |
+|---|---|---|
+| 01 | Archipelago | [01-archipelago.png](v0.5/01-archipelago.png) |
+| 01 | Archipelago, light theme | [01-archipelago-light.png](v0.5/01-archipelago-light.png) |
+| 02 | Migration | [02-migration.png](v0.5/02-migration.png) |
+| 03 | Convergence | [03-convergence.png](v0.5/03-convergence.png) |
+| 04 | Run | [04-run.png](v0.5/04-run.png) |
+| 05 | Runs | [05-runs.png](v0.5/05-runs.png) |
+| 06 | About | [06-about.png](v0.5/06-about.png) |
+
+Compare `01` against v0.4's: the same run, now in a fixed box with walls that
+turn with the camera, shaded nodes of constant size, and the counts on one line
+instead of four cards.
+
+---
+
 ## v0.4 — honest edges
 
 Six pages. No new pages since v0.3 — this round is correctness in the 3D view.

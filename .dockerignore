@@ -1,0 +1,10 @@
+# Only web/ goes into the image; the run library is mounted, not copied.
+**/node_modules
+web/dist
+data
+docs
+.git
+archipelago_ui
+archipelago_cluster_client
+__pycache__
+*.pyc

@@ -1,0 +1,17 @@
+# Archipelago for teammates: one command, no toolchain.
+#
+#   docker compose up --build
+#   open http://localhost:5173
+#
+# ./data is the run library. Runs added on the Runs page are written there, so
+# they survive the container.
+services:
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

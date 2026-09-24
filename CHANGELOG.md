@@ -3,6 +3,54 @@
 One entry per tagged frontend version: what shipped, what it demonstrates, and
 what building it revealed. Screenshots for each live in `docs/version-history/<version>/`.
 
+## v0.5 — TypeScript, and a view that holds still
+
+**Shipped.** The frontend is rewritten in TypeScript (React, Vite, three.js,
+Observable Plot) under `web/`, with all six pages the Streamlit app had. The
+Streamlit app is untouched and still runs; the two can be compared side by side.
+`docker compose up --build` at the repo root serves the new one with the run
+library mounted.
+
+**What it demonstrates.** That the rewrite changes how the run is drawn, not what
+the run is. The TypeScript STN builder is pinned to the Python one by golden
+tests -- the same 3,294 nodes, 10,810 within-island edges and 387 routes from 598
+transfers on the sample run, node keys in the same order, the edge table element
+for element -- because the node key is the clustering API's join key and a silent
+disagreement there shows a wrong picture rather than an error. The event-derived
+tables are held to the harness's own `run_end` totals the same way. 29 tests.
+
+**What building it revealed.**
+
+- *The first 3D cut looked flat on any GPU, and the cause was the renderer's
+  settings, not the data.* Depth testing had been switched off, so nothing
+  occluded anything, and node sizes ignored distance. With both fixed, the
+  cloud reads as a volume.
+- *What made the Streamlit view easy to look around was Plotly's turntable.*
+  The data sits in a fixed cube, the three walls on the far side of the camera
+  carry a grid and swap as it turns, fitness stays up, and there is no inertia
+  or panning. That is reproduced exactly; a control never moves the camera.
+- *Marking every trajectory start is noise in an island model.* Every initial
+  individual on every island is a start, so STN Analytics' start boxes marked
+  hundreds of points and said little. Island finishes remain, as gold diamonds.
+- *Additive edges burn a dense core to white.* Ordinary blending at low opacity
+  lets dense regions settle at the island's colour instead. Every edge is still
+  drawn; the slider changes opacity, never which edges exist.
+- *"Even height" broke fitness ties by sort order,* which put a migrant and the
+  individual it was copied from at different heights and made the zero-length
+  migration count read 0 instead of 387. Ties now share a rank.
+- *The team now has two fitness conventions.* The Streamlit app drew a descent
+  (best at the bottom); the clustering repo's new `--fplot` draws a climb (best
+  at the top). Both are offered here, and the axis names the position rather
+  than "lower = better", which read backwards on a minimising run. Worth
+  settling on one.
+
+**Not done.** The clustering level (plan M7) and the Arrow endpoint on the API
+(M5) are not built; the run library is served by the dev/preview server's own
+routes, with the same shape the API endpoints will have. The Docker image was
+written and the build it runs (`npm run build`, `vite preview`) was verified
+locally, but the image itself was not built here because the Docker engine was
+not running.
+
 ## v0.4 — Honest edges
 
 **Shipped.** The 3D view now draws what it says it draws. Island territories

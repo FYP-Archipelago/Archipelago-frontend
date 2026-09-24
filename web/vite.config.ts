@@ -5,10 +5,11 @@ import { join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, type Connect, type Plugin } from "vite";
 
 const ROOT = fileURLToPath(new URL(".", import.meta.url));
-const DATA_DIR = resolve(ROOT, "..", "data");
+/** The run library. The repo's data/ by default; the Docker image mounts it. */
+const DATA_DIR = resolve(process.env["ARCHIPELAGO_DATA"] ?? join(ROOT, "..", "data"));
 
 /** The run contract: the only files a run directory may hold. */
 const RUN_FILES = new Set([
@@ -42,12 +43,14 @@ function sizeOf(dir: string): number {
 }
 
 /**
- * Serve the run library straight off disk in development.
+ * Serve the run library straight off disk.
  *
- * The runs live in the repo's `data/` directory, outside Vite's root, and a
- * browser cannot touch the filesystem. This is the development stand-in for the
- * API endpoints the plan puts in M5 -- same shape, so the client does not change
- * when the real ones arrive.
+ * The runs live in `data/`, outside Vite's root, and a browser cannot touch the
+ * filesystem. The same routes are attached to the dev server and to the
+ * preview server, so the Docker image -- which serves the built app with
+ * `vite preview` -- behaves exactly like development. These are the stand-in for
+ * the API endpoints the plan puts in M5; same shape, so the client does not
+ * change when the real ones arrive.
  *
  *   GET    /runs                    run names that hold data
  *   GET    /runs/<id>/<file>        one contract file
@@ -59,7 +62,16 @@ function runLibrary(): Plugin {
   return {
     name: "archipelago-run-library",
     configureServer(server) {
-      server.middlewares.use("/runs", (req, res, next) => {
+      attachLibrary(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      attachLibrary(server.middlewares);
+    },
+  };
+}
+
+function attachLibrary(middlewares: Connect.Server): void {
+      middlewares.use("/runs", (req, res, next) => {
         const path = (req.url ?? "").split("?")[0] ?? "";
         if (path === "/" || path === "") {
           const runs = existsSync(DATA_DIR) ? readdirSync(DATA_DIR).filter(hasRun).sort().reverse() : [];
@@ -80,7 +92,7 @@ function runLibrary(): Plugin {
         res.end(readFileSync(target));
       });
 
-      server.middlewares.use("/library", (req, res) => {
+      middlewares.use("/library", (req, res) => {
         const path = (req.url ?? "").split("?")[0] ?? "";
         const [, rawId = "", file = ""] = path.split("/");
         const reply = (status: number, body: unknown) => {
@@ -148,8 +160,6 @@ function runLibrary(): Plugin {
 
         reply(405, { error: "Unsupported request." });
       });
-    },
-  };
 }
 
 export default defineConfig({
@@ -158,6 +168,18 @@ export default defineConfig({
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
   server: { port: 5173 },
+  preview: { port: 5173 },
+  build: {
+    rollupOptions: {
+      output: {
+        // The two big libraries change far less often than the app, so they get
+        // their own files and stay cached across releases.
+        manualChunks: { three: ["three"], plot: ["@observablehq/plot"] },
+      },
+    },
+    // three.js alone is ~700 kB minified; that is the price of the 3D view.
+    chunkSizeWarningLimit: 800,
+  },
   worker: { format: "es" },
   test: {
     globals: true,
