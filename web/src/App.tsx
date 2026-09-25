@@ -16,6 +16,25 @@ import "./theme/tokens.css";
 import "./app.css";
 
 const THEME_KEY = "archipelago-theme";
+const RUN_KEY = "archipelago-run";
+const VIEW_KEY = "archipelago-view";
+
+/** Storage can be missing or throw (private windows); nothing here depends on it. */
+function remember(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // not saved; the app still works
+  }
+}
+function recall<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw === null ? null : (JSON.parse(raw) as T);
+  } catch {
+    return null;
+  }
+}
 
 function applyTheme(theme: ThemeName): void {
   // Set synchronously, before anything re-renders: charts read their colours
@@ -68,14 +87,29 @@ export default function App() {
       .then((r) => r.json() as Promise<{ runs: string[] }>)
       .then((body) => {
         setRuns(body.runs);
-        setRunId((current) => (current !== null && body.runs.includes(current) ? current : body.runs[0] ?? null));
+        // Keep the open run; otherwise reopen the one from last time.
+        const last = recall<string>(RUN_KEY);
+        setRunId((current) => {
+          if (current !== null && body.runs.includes(current)) return current;
+          if (last !== null && body.runs.includes(last)) return last;
+          return body.runs[0] ?? null;
+        });
         setListError(null);
       })
       .catch(() => setListError("Could not list runs. Is the dev server serving data/?"));
   }, []);
   useEffect(refreshRuns, [refreshRuns]);
+  useEffect(() => { if (runId !== null) remember(RUN_KEY, runId); }, [runId]);
 
-  const [view, setViewState] = useState<ViewState>(DEFAULT_VIEW);
+  useEffect(() => {
+    const label = PAGES.find((p) => p.id === page)?.label ?? "Archipelago";
+    document.title = page === "archipelago" ? "Archipelago" : `${label} · Archipelago`;
+  }, [page]);
+
+  // View options come back as they were left, merged over the defaults so a
+  // setting added later still gets a value.
+  const [view, setViewState] = useState<ViewState>(() => ({ ...DEFAULT_VIEW, ...recall<Partial<ViewState>>(VIEW_KEY) }));
+  useEffect(() => remember(VIEW_KEY, view), [view]);
   const setView = useCallback((patch: Partial<ViewState>) => setViewState((v) => ({ ...v, ...patch })), []);
   const [hiddenIslands, setHiddenIslands] = useState<ReadonlySet<number>>(new Set());
   useEffect(() => setHiddenIslands(new Set()), [runId]);

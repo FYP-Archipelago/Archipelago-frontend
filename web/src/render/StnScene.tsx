@@ -20,6 +20,12 @@
  * One draw call for every node, which is also what keeps this usable on a
  * machine without a discrete GPU. A frame is only rendered when the camera or
  * the data changes, so an idle view costs nothing.
+ *
+ * Picking is done in screen space: a click projects every visible node and takes
+ * the front-most one whose disc covers the pointer, which is exactly the node
+ * the viewer sees there. A press that moves more than a few pixels is a drag and
+ * turns the table instead. Only the node's index leaves this file; its record
+ * comes from the worker.
  */
 
 import { useEffect, useMemo, useRef } from "react";
@@ -28,6 +34,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 import { NodeFlag } from "../contract/schema.js";
 import type { LayoutPayload, StnPayload } from "../data/worker/data.worker.js";
+import type { Lineage, NeighbourRef } from "../data/stn/inspect.js";
 import { SCENE, type ScenePalette, type ThemeName } from "../theme/palette.js";
 
 /** Half the side of the cube the data is fitted into. */
@@ -48,6 +55,38 @@ export interface StnSceneProps {
   /** Changing this puts the camera back to its starting position. */
   resetToken: string;
   onError: (message: string) => void;
+  colourBy: "island" | "fitness";
+  focus: Focus;
+  /** A click: the node under the pointer, or null for empty space. */
+  onPick: (index: number | null) => void;
+  /** The node under a still pointer, in canvas pixels, or null. */
+  onHover: (hover: { index: number; x: number; y: number } | null) => void;
+  /** Filled with the scene's imperative actions while it is mounted. */
+  apiRef: { current: SceneApi | null };
+}
+
+/** What is selected, and what to draw around it. */
+export interface Focus {
+  selected: number | null;
+  parents: readonly NeighbourRef[];
+  children: readonly NeighbourRef[];
+  lineage: Lineage | null;
+}
+
+export interface SceneApi {
+  /** The current view as a PNG data URL. */
+  capture: () => string | null;
+  /** Move the camera so it turns about this node instead of the box's centre. */
+  centreOn: (index: number) => void;
+}
+
+/** What picking needs, kept in a ref so the pointer handlers never go stale. */
+interface Pickable {
+  positions: Float32Array;
+  /** On-screen diameter of each node in CSS pixels; 0 when hidden. */
+  sizes: Float32Array;
+  /** Gold markers, drawn over everything, so they win a pick first. */
+  finals: Array<{ index: number; size: number }>;
 }
 
 interface Stage {
@@ -58,6 +97,7 @@ interface Stage {
   orbit: OrbitControls;
   pan: OrbitControls;
   content: THREE.Group;
+  focus: THREE.Group;
   box: BoxParts | null;
   dirty: boolean;
   dims: 2 | 3;
@@ -74,12 +114,22 @@ interface BoxParts {
 export function StnScene({
   payload, layout, edgeIntensity, nodeScale, showMigrations, showFrame,
   hiddenIslands, theme, resetToken, onError,
+  colourBy, focus, onPick, onHover, apiRef,
 }: StnSceneProps) {
   const palette = SCENE[theme];
   const hostRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Stage | null>(null);
   const edgeMaterialRef = useRef<THREE.LineBasicMaterial | null>(null);
   const migrationRef = useRef<THREE.LineSegments | null>(null);
+  const nodesRef = useRef<THREE.Points | null>(null);
+  const pickRef = useRef<Pickable | null>(null);
+  const lineageOnRef = useRef(false);
+  const focusRef = useRef(focus);
+  focusRef.current = focus;
+  const onPickRef = useRef(onPick);
+  const onHoverRef = useRef(onHover);
+  onPickRef.current = onPick;
+  onHoverRef.current = onHover;
 
   const n = payload.nodeCount;
   const is3d = layout.dims === 3;
@@ -115,6 +165,20 @@ export function StnScene({
       if (payload.maximising ? value > best : value < best) best = value;
     }
     return best;
+  }, [payload, n]);
+
+  /**
+   * Colour by fitness: position in the run's ranking, not raw value, so a few
+   * terrible early points do not crush every other node into one colour.
+   * 1 is the best node.
+   */
+  const fitnessShade = useMemo(() => {
+    const order = Array.from({ length: n }, (_, i) => i).sort((a, b) =>
+      payload.maximising ? payload.fitness[b]! - payload.fitness[a]! : payload.fitness[a]! - payload.fitness[b]!,
+    );
+    const shade = new Float32Array(n);
+    order.forEach((node, rank) => { shade[node] = n > 1 ? 1 - rank / (n - 1) : 1; });
+    return shade;
   }, [payload, n]);
 
   // ---- stage: renderer, cameras, controls, render loop --------------------
@@ -161,19 +225,126 @@ export function StnScene({
     pan.maxZoom = 40;
 
     const content = new THREE.Group();
-    scene.add(content);
+    const focusGroup = new THREE.Group();
+    scene.add(content, focusGroup);
 
     const stage: Stage = {
       renderer, scene, perspective, orthographic, orbit, pan, content,
-      box: null, dirty: true, dims: 3,
+      focus: focusGroup, box: null, dirty: true, dims: 3,
     };
     stageRef.current = stage;
 
+    // A tooltip left over from before the camera moved points at the wrong place.
+    let hovering = false;
+    const dropHover = () => {
+      if (!hovering) return;
+      hovering = false;
+      onHoverRef.current(null);
+    };
     orbit.addEventListener("change", () => {
       if (stage.box !== null) orientBox(stage.box, perspective.position);
       stage.dirty = true;
+      dropHover();
     });
-    pan.addEventListener("change", () => { stage.dirty = true; });
+    pan.addEventListener("change", () => {
+      stage.dirty = true;
+      dropHover();
+    });
+
+    // ---- picking ---------------------------------------------------------
+    const canvas = renderer.domElement;
+    const viewProjection = new THREE.Matrix4();
+    const pickAt = (clientX: number, clientY: number): number | null => {
+      const pickable = pickRef.current;
+      if (pickable === null) return null;
+      const rect = canvas.getBoundingClientRect();
+      const px = clientX - rect.left;
+      const py = clientY - rect.top;
+      const camera = stage.dims === 3 ? perspective : orthographic;
+      camera.updateMatrixWorld();
+      const m = viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).elements;
+      const { positions, sizes, finals } = pickable;
+      const w = rect.width;
+      const h = rect.height;
+      let sx = 0;
+      let sy = 0;
+      let depth = 0;
+      const project = (i: number): boolean => {
+        const x = positions[i * 3]!;
+        const y = positions[i * 3 + 1]!;
+        const z = positions[i * 3 + 2]!;
+        const cw = m[3]! * x + m[7]! * y + m[11]! * z + m[15]!;
+        if (cw <= 0) return false;
+        sx = ((m[0]! * x + m[4]! * y + m[8]! * z + m[12]!) / cw * 0.5 + 0.5) * w;
+        sy = (0.5 - (m[1]! * x + m[5]! * y + m[9]! * z + m[13]!) / cw * 0.5) * h;
+        depth = (m[2]! * x + m[6]! * y + m[10]! * z + m[14]!) / cw;
+        return true;
+      };
+      for (const final of finals) {
+        if (project(final.index) && Math.hypot(sx - px, sy - py) <= final.size / 2 + 2) return final.index;
+      }
+      let front = -1;
+      let frontDepth = Infinity;
+      let near = -1;
+      let nearDistance = Infinity;
+      for (let i = 0; i < sizes.length; i += 1) {
+        const size = sizes[i]!;
+        if (size === 0 || !project(i)) continue;
+        const d = Math.hypot(sx - px, sy - py);
+        if (d <= size / 2 + 1.5 && depth < frontDepth) {
+          front = i;
+          frontDepth = depth;
+        }
+        if (d < nearDistance) {
+          nearDistance = d;
+          near = i;
+        }
+      }
+      if (front >= 0) return front;
+      // A near miss on a small node still counts; a click in empty space does not.
+      return nearDistance <= 6 ? near : null;
+    };
+
+    let pressed: { x: number; y: number } | null = null;
+    const onDown = (event: PointerEvent) => { pressed = { x: event.clientX, y: event.clientY }; };
+    const onUp = (event: PointerEvent) => {
+      if (pressed === null) return;
+      const moved = Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y);
+      pressed = null;
+      if (moved < 5 && event.button === 0) onPickRef.current(pickAt(event.clientX, event.clientY));
+    };
+    let hoverFrame = 0;
+    let lastMove: PointerEvent | null = null;
+    const onMove = (event: PointerEvent) => {
+      if (event.buttons !== 0) {
+        dropHover();
+        return;
+      }
+      lastMove = event;
+      if (hoverFrame !== 0) return;
+      hoverFrame = requestAnimationFrame(() => {
+        hoverFrame = 0;
+        const move = lastMove;
+        if (move === null) return;
+        const index = pickAt(move.clientX, move.clientY);
+        canvas.style.cursor = index === null ? "" : "pointer";
+        if (index === null) {
+          dropHover();
+          return;
+        }
+        const rect = canvas.getBoundingClientRect();
+        hovering = true;
+        onHoverRef.current({ index, x: move.clientX - rect.left, y: move.clientY - rect.top });
+      });
+    };
+    const onLeave = () => {
+      canvas.style.cursor = "";
+      dropHover();
+    };
+    canvas.addEventListener("pointerdown", onDown);
+    canvas.addEventListener("pointerup", onUp);
+    canvas.addEventListener("pointermove", onMove);
+    canvas.addEventListener("pointerleave", onLeave);
 
     const resize = () => {
       const width = host.clientWidth || 1;
@@ -206,6 +377,11 @@ export function StnScene({
 
     return () => {
       cancelAnimationFrame(frameId);
+      cancelAnimationFrame(hoverFrame);
+      canvas.removeEventListener("pointerdown", onDown);
+      canvas.removeEventListener("pointerup", onUp);
+      canvas.removeEventListener("pointermove", onMove);
+      canvas.removeEventListener("pointerleave", onLeave);
       observer.disconnect();
       orbit.dispose();
       pan.dispose();
@@ -289,13 +465,25 @@ export function StnScene({
     const islandRgb = palette.islands.map(cssToRgb);
     for (let i = 0; i < n; i += 1) {
       nodePositions.set(fitted.subarray(i * 3, i * 3 + 3), i * 3);
-      const rgb = islandRgb[payload.islandId[i]! % islandRgb.length]!;
+      const rgb = colourBy === "fitness"
+        ? viridis(fitnessShade[i]!)
+        : islandRgb[payload.islandId[i]! % islandRgb.length]!;
       nodeColours.set(rgb, i * 3);
       nodeSizes[i] = hiddenIslands.has(payload.islandId[i]!)
         ? 0
         : (5.5 + 2.4 * Math.pow(Math.min(payload.visits[i]!, 8), 0.7)) * nodeScale;
     }
-    stage.content.add(pointCloud(nodePositions, nodeColours, nodeSizes, nodeShapes, pixelRatio, false));
+    const nodes = pointCloud(nodePositions, nodeColours, nodeSizes, nodeShapes, pixelRatio, false, palette);
+    nodesRef.current = nodes;
+    // Rebuilt nodes start fully lit; keep a traced lineage's dimming.
+    const traced = focusRef.current.lineage;
+    if (traced !== null) {
+      const emphasis = nodes.geometry.getAttribute("emphasis") as THREE.BufferAttribute;
+      const values = emphasis.array as Float32Array;
+      values.fill(0);
+      for (const node of traced.nodes) values[node] = 1;
+    }
+    stage.content.add(nodes);
 
     // Where each island finished: the old app's gold diamonds, drawn on top so a
     // marker is never lost inside the cloud. The one holding the best fitness in
@@ -317,8 +505,16 @@ export function StnScene({
         colours.set(gold, slot * 3);
         sizes[slot] = (payload.fitness[node] === bestFitness ? 24 : 17) * Math.sqrt(nodeScale);
       });
-      stage.content.add(pointCloud(positions, colours, sizes, shapes, pixelRatio, true));
+      stage.content.add(pointCloud(positions, colours, sizes, shapes, pixelRatio, true, palette));
     }
+    pickRef.current = {
+      positions: fitted,
+      sizes: nodeSizes,
+      finals: finals.map((index) => ({
+        index,
+        size: (payload.fitness[index] === bestFitness ? 24 : 17) * Math.sqrt(nodeScale),
+      })),
+    };
 
     // Trajectory edges. Ordinary blending, low opacity, so dense regions settle
     // at the island's colour instead of burning to white. Every edge is drawn;
@@ -349,7 +545,7 @@ export function StnScene({
       vertexColors: true,
       transparent: true,
       depthWrite: false,
-      opacity: Math.min(1, palette.edgeOpacity * edgeIntensity),
+      opacity: edgeOpacity(palette, edgeIntensity, lineageOnRef.current),
     });
     edgeMaterialRef.current = edgeMaterial;
     stage.content.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
@@ -379,15 +575,114 @@ export function StnScene({
     stage.dirty = true;
     // edgeIntensity and showMigrations are applied by their own cheap effects.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [payload, fitted, hiddenIslands, nodeScale, n, palette, bestFitness]);
+  }, [payload, fitted, hiddenIslands, nodeScale, n, palette, bestFitness, colourBy, fitnessShade]);
 
   useEffect(() => {
     const material = edgeMaterialRef.current;
     const stage = stageRef.current;
     if (material === null || stage === null) return;
-    material.opacity = Math.min(1, palette.edgeOpacity * edgeIntensity);
+    material.opacity = edgeOpacity(palette, edgeIntensity, lineageOnRef.current);
     stage.dirty = true;
   }, [edgeIntensity, palette]);
+
+  // ---- selection: ring, neighbour edges, traced lineage ---------------------
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (stage === null) return;
+    disposeChildren(stage.focus);
+    const pixelRatio = stage.renderer.getPixelRatio();
+    const at = (i: number): [number, number, number] => [fitted[i * 3]!, fitted[i * 3 + 1]!, fitted[i * 3 + 2]!];
+    const lines = (pairs: number[], colour: number, opacity: number, order: number) => {
+      if (pairs.length === 0) return;
+      const positions = new Float32Array(pairs.length * 3);
+      pairs.forEach((node, k) => positions.set(at(node), k * 3));
+      const segments = new THREE.LineSegments(
+        new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(positions, 3)),
+        new THREE.LineBasicMaterial({ color: colour, transparent: true, opacity, depthTest: false }),
+      );
+      segments.renderOrder = order;
+      stage.focus.add(segments);
+    };
+
+    const { selected, lineage } = focus;
+    if (lineage !== null) {
+      lines(Array.from(lineage.edges), palette.ancestry, 0.85, 8);
+      lines(Array.from(lineage.crossings), palette.migration, 0.9, 8);
+    }
+
+    if (selected !== null && selected < n) {
+      const steps: number[] = [];
+      const crossings: number[] = [];
+      for (const parent of focus.parents) (parent.via === "migration" ? crossings : steps).push(parent.index, selected);
+      const out: number[] = [];
+      for (const child of focus.children) out.push(selected, child.index);
+      if (lineage === null) lines(steps, palette.ancestry, 0.95, 9);
+      lines(crossings, palette.migration, 0.95, 9);
+      lines(out, palette.descendants, 0.8, 9);
+
+      const ring = pointCloud(
+        new Float32Array(at(selected)),
+        new Float32Array(cssToRgb(palette.focus)),
+        new Float32Array([26]),
+        new Float32Array([2]),
+        pixelRatio,
+        true,
+        palette,
+      );
+      ring.renderOrder = 12;
+      stage.focus.add(ring);
+    }
+
+    // Dim everything outside a traced lineage, so the ancestry reads on its own.
+    lineageOnRef.current = lineage !== null;
+    const nodes = nodesRef.current;
+    const emphasis = nodes?.geometry.getAttribute("emphasis") as THREE.BufferAttribute | undefined;
+    if (emphasis !== undefined) {
+      const values = emphasis.array as Float32Array;
+      if (lineage === null) values.fill(1);
+      else {
+        values.fill(0);
+        for (const node of lineage.nodes) values[node] = 1;
+      }
+      emphasis.needsUpdate = true;
+    }
+    if (edgeMaterialRef.current !== null) {
+      edgeMaterialRef.current.opacity = edgeOpacity(palette, edgeIntensity, lineage !== null);
+    }
+    stage.dirty = true;
+    // edgeIntensity is read for the dimmed opacity only; its own effect handles changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus, fitted, palette, n, payload]);
+
+  // ---- actions the page can call ---------------------------------------------
+  useEffect(() => {
+    apiRef.current = {
+      capture: () => {
+        const stage = stageRef.current;
+        if (stage === null) return null;
+        // Render and read in the same task, before the browser clears the buffer.
+        stage.renderer.render(stage.scene, stage.dims === 3 ? stage.perspective : stage.orthographic);
+        return stage.renderer.domElement.toDataURL("image/png");
+      },
+      centreOn: (index: number) => {
+        const stage = stageRef.current;
+        if (stage === null || index >= n) return;
+        const target = new THREE.Vector3(fitted[index * 3]!, fitted[index * 3 + 1]!, fitted[index * 3 + 2]!);
+        if (stage.dims === 3) {
+          const shift = target.clone().sub(stage.orbit.target);
+          stage.perspective.position.add(shift);
+          stage.orbit.target.copy(target);
+          stage.orbit.update();
+        } else {
+          stage.pan.target.set(target.x, target.y, 0);
+          stage.orthographic.position.set(target.x, target.y, 10);
+          stage.pan.update();
+        }
+        stage.dirty = true;
+      },
+    };
+    return () => { apiRef.current = null; };
+  }, [apiRef, fitted, n]);
 
   useEffect(() => {
     const migrations = migrationRef.current;
@@ -408,12 +703,15 @@ const POINT_VERTEX = /* glsl */ `
   attribute vec3 colour;
   attribute float size;
   attribute float shape;
+  attribute float emphasis;
   uniform float pixelRatio;
+  uniform vec3 ground;
   varying vec3 vColour;
   varying float vShape;
   varying float vSize;
   void main() {
-    vColour = colour;
+    // Nodes outside a traced lineage fade most of the way into the ground.
+    vColour = mix(ground, colour, 0.18 + 0.82 * emphasis);
     vShape = shape;
     vSize = size * pixelRatio;
     gl_PointSize = vSize;
@@ -433,8 +731,15 @@ const POINT_FRAGMENT = /* glsl */ `
     if (vSize < 0.5) discard;
     vec2 p = gl_PointCoord * 2.0 - 1.0;
     p.y = -p.y;
-    float edge = vShape < 0.5 ? length(p) : abs(p.x) + abs(p.y);
+    float edge = vShape < 0.5 || vShape > 1.5 ? length(p) : abs(p.x) + abs(p.y);
     if (edge > 1.0) discard;
+
+    // Shape 2 is the selection ring: flat, no shading.
+    if (vShape > 1.5) {
+      if (edge < 0.66) discard;
+      gl_FragColor = vec4(vColour, 1.0);
+      return;
+    }
 
     // About one device pixel of edge, in a darker shade of the node's own
     // colour: enough to separate overlapping nodes without turning a small one
@@ -463,23 +768,49 @@ function pointCloud(
   shapes: Float32Array,
   pixelRatio: number,
   onTop: boolean,
+  palette: ScenePalette,
 ): THREE.Points {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("colour", new THREE.BufferAttribute(colours, 3));
   geometry.setAttribute("size", new THREE.BufferAttribute(sizes, 1));
   geometry.setAttribute("shape", new THREE.BufferAttribute(shapes, 1));
+  geometry.setAttribute("emphasis", new THREE.BufferAttribute(new Float32Array(sizes.length).fill(1), 1));
   const material = new THREE.ShaderMaterial({
     vertexShader: POINT_VERTEX,
     fragmentShader: POINT_FRAGMENT,
     uniforms: {
       pixelRatio: { value: pixelRatio },
+      ground: { value: new THREE.Vector3(...cssToRgb(`#${palette.canvas.toString(16).padStart(6, "0")}`)) },
     },
     depthTest: !onTop,
   });
   const points = new THREE.Points(geometry, material);
   if (onTop) points.renderOrder = 10;
   return points;
+}
+
+/** Trajectory edges, dimmed to a quarter behind a traced lineage. */
+function edgeOpacity(palette: ScenePalette, intensity: number, lineageOn: boolean): number {
+  return Math.min(1, palette.edgeOpacity * intensity * (lineageOn ? 0.25 : 1));
+}
+
+/** Viridis, the colour map the Streamlit app used for fitness. t = 1 is the best. */
+const VIRIDIS = [
+  [0x44, 0x01, 0x54], [0x48, 0x28, 0x78], [0x3e, 0x49, 0x89], [0x31, 0x68, 0x8e], [0x26, 0x82, 0x8e],
+  [0x1f, 0x9e, 0x89], [0x35, 0xb7, 0x79], [0x6e, 0xce, 0x58], [0xb5, 0xde, 0x2b], [0xfd, 0xe7, 0x25],
+] as const;
+function viridis(t: number): [number, number, number] {
+  const x = Math.min(Math.max(t, 0), 1) * (VIRIDIS.length - 1);
+  const i = Math.min(Math.floor(x), VIRIDIS.length - 2);
+  const f = x - i;
+  const a = VIRIDIS[i]!;
+  const b = VIRIDIS[i + 1]!;
+  return [
+    (a[0] + (b[0] - a[0]) * f) / 255,
+    (a[1] + (b[1] - a[1]) * f) / 255,
+    (a[2] + (b[2] - a[2]) * f) / 255,
+  ];
 }
 
 /** "#RRGGBB" to [r, g, b] in 0..1, left in sRGB. */

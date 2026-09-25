@@ -81,3 +81,29 @@ export function SlidersIcon(props: IconProps) {
     </Svg>
   );
 }
+
+export function StarIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9Z" />
+    </Svg>
+  );
+}
+
+export function CameraIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 8h3l1.5-2.5h7L17 8h3v11H4Z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </Svg>
+  );
+}
+
+export function KeyboardIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="2.5" y="6" width="19" height="12" rx="2" />
+      <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6" />
+    </Svg>
+  );
+}

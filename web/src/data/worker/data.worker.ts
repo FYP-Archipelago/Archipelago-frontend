@@ -17,6 +17,10 @@ import { parseEvents, toEvaluationRows } from "../../contract/rows.js";
 import { driftLayout, type LayoutProvenance } from "../../layout/graph/DriftLayout.js";
 import { pcaLayout } from "../../layout/pca/PcaLayout.js";
 import { StnBuilder, type StnSnapshot } from "../stn/StnBuilder.js";
+import {
+  buildAdjacency, nodeDetail, traceLineage,
+  type Adjacency, type Lineage, type NodeDetail,
+} from "../stn/inspect.js";
 
 export type LayoutKind = "pca" | "drift";
 
@@ -60,16 +64,29 @@ export interface LayoutPayload {
 
 export type WorkerRequest =
   | { type: "load"; runId: string; layout: LayoutOptions }
-  | { type: "relayout"; layout: LayoutOptions };
+  | { type: "relayout"; layout: LayoutOptions }
+  /** One node's record and neighbours. The page sends an index, never a node. */
+  | { type: "inspect"; id: number; index: number }
+  | { type: "lineage"; id: number; index: number };
 
 export type WorkerResponse =
   | { type: "phase"; phase: string }
   | { type: "ready"; payload: StnPayload; layout: LayoutPayload }
   | { type: "layout"; layout: LayoutPayload }
+  | { type: "detail"; id: number; detail: NodeDetail }
+  | { type: "traced"; id: number; lineage: Lineage }
   | { type: "error"; message: string };
 
 let snapshot: StnSnapshot | null = null;
 let maximising = false;
+/** Built on the first inspection, not at load: most sessions never click. */
+let adjacency: Adjacency | null = null;
+
+function adjacent(): Adjacency {
+  if (snapshot === null) throw new Error("no run loaded");
+  adjacency ??= buildAdjacency(snapshot, maximising);
+  return adjacency;
+}
 
 function post(message: WorkerResponse, transfer: Transferable[] = []): void {
   (self as unknown as Worker).postMessage(message, transfer);
@@ -128,6 +145,7 @@ async function load(runId: string, options: LayoutOptions): Promise<void> {
   builder.ingestEvaluations(rows);
   builder.ingestEvents(events);
   snapshot = builder.snapshot();
+  adjacency = null;
 
   post({ type: "phase", phase: "projecting" });
   const layout = project(options);
@@ -175,6 +193,16 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
       post({ type: "phase", phase: "projecting" });
       const layout = project(request.layout);
       post({ type: "layout", layout }, [layout.positions.buffer]);
+      return;
+    }
+    if (request.type === "inspect") {
+      const detail = nodeDetail(snapshot!, adjacent(), request.index, maximising);
+      post({ type: "detail", id: request.id, detail });
+      return;
+    }
+    if (request.type === "lineage") {
+      const lineage = traceLineage(snapshot!, adjacent(), request.index);
+      post({ type: "traced", id: request.id, lineage }, [lineage.nodes.buffer, lineage.edges.buffer, lineage.crossings.buffer]);
     }
   } catch (error: unknown) {
     post({ type: "error", message: error instanceof Error ? error.message : String(error) });

@@ -27,6 +27,12 @@ export interface ScenePalette {
   migration: number;
   /** Trajectory edge opacity at intensity 1. */
   edgeOpacity: number;
+  /** The ring around a selected node. */
+  focus: string;
+  /** Edges into a selected node, and the traced lineage. */
+  ancestry: number;
+  /** Edges out of a selected node. */
+  descendants: number;
 }
 
 export const ISLAND_CSS: Record<ThemeName, readonly string[]> = {
@@ -46,6 +52,9 @@ export const SCENE: Record<ThemeName, ScenePalette> = {
     islandBest: "#FFD166",
     migration: 0xff4d9d,
     edgeOpacity: 0.07,
+    focus: "#DDE8E9",
+    ancestry: 0x4fbfb3,
+    descendants: 0x9cb2b7,
   },
   light: {
     canvas: 0xdde8e9,
@@ -58,5 +67,8 @@ export const SCENE: Record<ThemeName, ScenePalette> = {
     islandBest: "#C58A0A",
     migration: 0xcc2d77,
     edgeOpacity: 0.075,
+    focus: "#0C2630",
+    ancestry: 0x146a61,
+    descendants: 0x3d5961,
   },
 };
