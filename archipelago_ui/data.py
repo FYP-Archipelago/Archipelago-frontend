@@ -33,6 +33,14 @@ def get_stn(path: str, islands: tuple[int, ...] | None = None) -> STN:
     return build_stn(get_run(path), list(islands) if islands else None)
 
 
+@st.cache_data(show_spinner="Preparing the viewer stream…")
+def get_viewer_payload(path: str) -> dict | None:
+    """The run as the WebGL viewer's per-evaluation stream (see viewer/payload.py)."""
+    from .viewer.payload import build_payload
+
+    return build_payload(get_run(path))
+
+
 @st.cache_data(show_spinner=False)
 def available_runs(root: str) -> list[str]:
     return [str(p) for p in discover_runs(root)]
@@ -42,6 +50,7 @@ def invalidate() -> None:
     """Drop every cached read. Called after the library changes on disk."""
     get_run.clear()
     get_stn.clear()
+    get_viewer_payload.clear()
     available_runs.clear()
 
 

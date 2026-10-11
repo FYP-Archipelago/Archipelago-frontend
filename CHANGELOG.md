@@ -3,6 +3,19 @@
 One entry per tagged frontend version: what shipped, what it demonstrates, and
 what building it revealed. Screenshots for each live in `docs/version-history/<version>/`.
 
+## Unreleased — WebGL2 STN viewer
+
+**Shipped.** The Archipelago page now opens on a JavaScript/WebGL2 viewer:
+density rendering into an RGBA16F
+target, weighted-mean hue composite, the full control rail (aggregate, backbone,
+separate islands/runs, height axis, exposure, saturation, bests, contested
+clusters, jump-to-best), cluster inspector and migration arcs. The earlier Plotly view is
+removed from the page.
+
+**Where it lives.** `archipelago_ui/viewer/` -- `frontend/` is plain ES modules
+with no build step; `payload.py` turns a run into the stream it draws. Runs,
+uploads and every other page are unchanged.
+
 ## v0.4 — Honest edges
 
 **Shipped.** The 3D view now draws what it says it draws. Island territories
