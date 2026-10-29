@@ -1,18 +1,8 @@
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-# Playwright, for scripts/capture_screenshots.py
-.venv-capture/
-.streamlit/secrets.toml
+node_modules/
+dist/
+/data/
+.env
+*.log
 .DS_Store
-
-# Clustering results kept between sessions (regenerable; one JSON per result).
-data/.cluster_results/
-
-# Local runs. The two sample runs under data/ are committed on purpose.
-runs/
-
-# Editor / tooling
 .vscode/
 .idea/
