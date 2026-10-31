@@ -243,19 +243,28 @@ input[type=range]::-moz-range-thumb{width:13px; height:13px; border:0; border-ra
 .inspect:not(:has(#ins-x:not([hidden]))){width:auto}
 .ins-h{text-transform:none; letter-spacing:0; font-size:11.5px}
 .ins-h b{letter-spacing:0}
-.mast-meta{padding:0 0 7px; gap:4px 18px; font-size:11px}
+.mast-meta{display:none}
+.mast-meta:has(.warn){display:flex; padding:0 0 7px; font-size:11px}
+.mast-meta:has(.warn) > :not(.warn){display:none}
 .cap{display:none}
 .wrap{flex:1; display:flex; flex-direction:column; min-width:0; width:100%; padding:0}
-.viewer{flex:1; display:flex; flex-direction:column; min-height:0; border-color:var(--line); border-radius:6px}
-.on-archipelago .stage{flex:1; height:auto; min-height:320px}
-.legend-inline{padding:7px 13px; gap:5px 16px; font-size:11px; border-top:1px solid var(--line); background:var(--panel)}
-.stat{padding:7px 13px}
-.stat .k{font-size:9.5px; letter-spacing:.08em}
-.stat .v{font-size:15px}
+.viewer{flex:1; display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-rows:minmax(0,1fr) auto; min-height:0; border-color:var(--line); border-radius:6px}
+.stage{grid-column:1 / -1}
+.on-archipelago .stage{height:auto; min-height:320px}
+.legend-inline{padding:8px 13px; gap:5px 14px; font-family:inherit; font-size:12px; letter-spacing:0; border-top:1px solid var(--line); background:var(--panel)}
+.strip{flex-wrap:nowrap; align-items:center; padding-right:7px; background:var(--panel); border-top:1px solid var(--line)}
+.stat{flex:none; min-width:0; display:flex; align-items:baseline; gap:5px; padding:0 7px; border:0}
+.stat:nth-child(3){display:none}
+.stat .k{margin:0; font-family:inherit; font-size:12px; letter-spacing:0; text-transform:none}
+.stat .v{font-size:13px}
 @media (min-width:901px){
   #gl{position:absolute; left:0; top:0; width:calc(100% - var(--dock)); height:100%}
   .stage-note{right:var(--dock)}
   .axis{right:calc(var(--dock) + 16px)}
   .inspect{right:calc(var(--dock) + 14px)}
-  :root:not([data-layout=theatre]) .rail{left:auto; right:0; top:var(--rail-top,0px); bottom:0; width:var(--dock); max-height:none; border:0; border-left:1px solid var(--line); border-radius:0; background:var(--panel); backdrop-filter:none; padding:0}
 }
+.ends{font-size:10px; letter-spacing:.06em}
+.axis{font-size:11px; letter-spacing:.06em}
+.sec .chip{padding:7px 9px}
+.sec .chip .lb{font-size:11.5px}
+.sec .chip .sw{width:10px; height:10px}

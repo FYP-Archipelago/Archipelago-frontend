@@ -6,10 +6,6 @@ import './style.css';
 import './designs.css';
 import './viewer/stn-viewer.css';
 
-// ?palette= and ?layout= preview the alternatives; the defaults are the chosen design.
-const design = new URLSearchParams(location.search);
-document.documentElement.dataset.palette = design.get('palette') || 'pitch';
-document.documentElement.dataset.layout = design.get('layout') || 'workbench';
 
 const token = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const C = { deep:token('--panel'), rule:token('--line'), ink:token('--ink'), soft:token('--soft'), faint:token('--faint'), mig:token('--mig'), best:token('--best'), islands:['--i0','--i1','--i2','--i3','--i4'].map(token) };
@@ -20,14 +16,44 @@ const api = async (url, options) => { const r = await fetch(`/api${url}`, option
 const post = (url, value) => api(url, { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(value) });
 const file64 = file => new Promise((resolve,reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(',')[1]); reader.onerror = reject; reader.readAsDataURL(file); });
 
-function Header({ eyebrow, title, question, children }) { return <header className="page-head"><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p className="question">{question}</p><details className="reading" open={design.get('layout')==='briefing'}><summary>How to read this</summary><div className="deck">{children}</div></details></header>; }
+function Header({ eyebrow, title, question, children }) { return <header className="page-head"><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p className="question">{question}</p><details className="reading"><summary>How to read this</summary><div className="deck">{children}</div></details></header>; }
 function Caption({ children }) { return <p className="caption">{children}</p>; }
 function Metrics({ values }) { return <div className="metrics">{values.map(([label,value,detail])=><div className="metric" key={label}><div className="metric-label">{label}</div><div className="metric-value">{value}</div>{detail&&<div className="metric-detail">{detail}</div>}</div>)}</div>; }
 function Table({ rows, columns, height=340 }) { return <div className="table-wrap" style={{maxHeight:height}}><table><thead><tr>{columns.map(c=><th key={c}>{c}</th>)}</tr></thead><tbody>{rows.map((r,i)=><tr key={i}>{columns.map(c=><td key={c}>{r[c] === null || r[c] === undefined ? '—' : String(r[c])}</td>)}</tr>)}</tbody></table></div>; }
 function Chart({ data, layout, height=340 }) { const ref=useRef(); useEffect(()=>{ const el=ref.current; if(!el) return; Plotly.react(el,data,{...layout,paper_bgcolor:C.deep,plot_bgcolor:C.deep,font:{family:'Archivo, sans-serif',color:C.soft,size:12},title:{text:layout.title,font:{color:C.ink,size:14},x:0.02},xaxis:{gridcolor:C.rule,zeroline:false,linecolor:C.rule,tickfont:{color:C.faint},...layout.xaxis},yaxis:{gridcolor:C.rule,zeroline:false,linecolor:C.rule,tickfont:{color:C.faint},...layout.yaxis},margin:layout.margin||{l:56,r:16,t:56,b:44},height},{responsive:true,displaylogo:false}); return ()=>Plotly.purge(el); },[data,layout,height]); return <div className="chart" ref={ref}/>; }
 function Notice({ children, type='info' }) { return <div className={`notice ${type}`}>{children}</div>; }
 function Details({ title, children }) { return <details><summary>{title}</summary><div className="details-body">{children}</div></details>; }
-function Viewer({ payload }) { const ref=useRef(); useEffect(()=>{ if(!payload || !ref.current) return; const viewer=mountViewer(ref.current,payload); return ()=>viewer?.destroy(); },[payload]); return <div className="viewer-host" ref={ref}/>; }
+const VIEWS = [['overview','Overview','Every island together, as the search happened'],['islands','By island','Each island on its own, without migration'],['migration','Migration only','Just the exchanges between islands'],['best','Best solution','Move to the best solution and show its details']];
+const setControl = (id,on) => { const b=document.getElementById(id); if(b&&(b.getAttribute('aria-pressed')==='true')!==on) b.click(); };
+const clickAll = selector => document.querySelectorAll(selector).forEach(b=>b.click());
+function showView(id) {
+  const close=document.getElementById('ins-x'); if(close&&!close.hidden) close.click();
+  setControl('b-group',id==='islands'||id==='migration'); setControl('t-edges',id!=='migration'); setControl('mig-all',id!=='islands');
+  const filter=document.getElementById('s-wt'); filter.value=id==='islands'?1:filter.defaultValue; filter.dispatchEvent(new Event('input',{bubbles:true}));
+  if(id==='overview') document.getElementById('reset')?.click();
+  if(id==='best') document.querySelector('#bests .icn.dia')?.closest('button')?.click();
+}
+function resetAll() {
+  showView('overview');
+  clickAll('#islands button[aria-pressed=false],#routes button[aria-pressed=false]');
+  [['b-isl',true],['b-run',true],['contest',false],['b-sel',true]].forEach(([id,on])=>setControl(id,on));
+  document.getElementById('z-fit')?.click();
+  document.querySelectorAll('.rail input[type=range]').forEach(r=>{ if(r.value!==r.defaultValue){ r.value=r.defaultValue; r.dispatchEvent(new Event('input',{bubbles:true})); } });
+}
+function syncLegend() {
+  const chips=document.querySelectorAll('#islands button');
+  document.querySelectorAll('#legend span').forEach(s=>{ const n=s.textContent.match(/^Island (\d+)/); if(!n) return; const chip=[...chips].find(c=>c.textContent.trim()===n[1]); s.classList.add('toggle'); s.classList.toggle('off',chip?.getAttribute('aria-pressed')==='false'); });
+}
+function Viewer({ payload }) {
+  const ref=useRef(), driving=useRef(false), [view,setView]=useState('overview'), [changed,setChanged]=useState(false);
+  useEffect(()=>{ if(!payload || !ref.current) return; setView('overview'); setChanged(false); const viewer=mountViewer(ref.current,payload); const tick=setInterval(syncLegend,500); return ()=>{ clearInterval(tick); viewer?.destroy(); }; },[payload]);
+  const drive=fn=>{ driving.current=true; fn(); driving.current=false; syncLegend(); };
+  const pick=id=>{ drive(()=>showView(id)); setView(id); };
+  const reset=()=>{ drive(resetAll); setView('overview'); setChanged(false); };
+  const manual=e=>{ if(driving.current) return; const control=e.target.closest('.rail button,.rail input[type=range]'); if(!control) return; if(control.id==='reset') return; if(['b-group','t-edges','mig-all'].includes(control.id)) setView(null); setChanged(true); };
+  const click=e=>{ if(e.target.closest('#reset')&&!driving.current) return reset(); const entry=e.target.closest('#legend span.toggle'); if(entry){ const n=entry.textContent.match(/^Island (\d+)/)[1]; [...document.querySelectorAll('#islands button')].find(c=>c.textContent.trim()===n)?.click(); } syncLegend(); };
+  return <div className="viewer-frame" onClickCapture={manual} onInputCapture={manual} onClick={click}><div className="views"><div className="view-tabs" role="group" aria-label="Choose a view">{VIEWS.map(([id,label,hint])=><button key={id} title={hint} aria-pressed={view===id} onClick={()=>pick(id)}>{label}</button>)}</div>{changed&&<button className="adjust" onClick={reset}>Reset all</button>}</div><p className="canvas-hint">Drag to rotate · Scroll to zoom · Click a node for details</p><div className="viewer-host" ref={ref}/></div>;
+}
 
 function Archipelago({ run, level, selectedResult, results, setSelectedResult }) {
   const [payload,setPayload]=useState(null), [error,setError]=useState('');
@@ -43,7 +69,7 @@ function Migration({ run }) {
   const delivered=frame.filter(r=>r.delivered).length, lat=median(frame.filter(r=>r.latency_seconds!=null).map(r=>Number(r.latency_seconds))), drift=median(frame.filter(r=>r.generational_drift!=null).map(r=>Number(r.generational_drift)));
   const grid=islands.map(source=>islands.map(dest=>frame.filter(r=>r.source_island===source&&r.dest_island===dest).reduce((n,r)=>n+Number(r.num_migrants||0),0)));
   return <><Header eyebrow="The search" title="Migration explorer" question="Who moved between islands, and did they arrive?">Every individual that crossed between islands: where it went, how long it took, and whether it arrived at all.</Header>
-    <Metrics values={[["Migration events",fmt(frame.length)],["Individuals moved",fmt(frame.reduce((n,r)=>n+Number(r.num_migrants||0),0))],["Delivered",fmt(delivered),delivered<frame.length?`-${frame.length-delivered} undelivered`:null],["Median latency",lat===null?'—':`${num(lat*1000,0)} ms`],["Median drift",drift===null?'—':`${num(drift,0)} gen`]]}/>
+    <Metrics values={[["Migration events",fmt(frame.length)],["Individuals moved",fmt(frame.reduce((n,r)=>n+Number(r.num_migrants||0),0))],["Individuals arrived",fmt(frame.filter(r=>r.delivered).reduce((n,r)=>n+Number(r.num_migrants||0),0))],["Events delivered",fmt(delivered),delivered<frame.length?`-${frame.length-delivered} undelivered`:null],["Median latency",lat===null?'—':`${num(lat*1000,0)} ms`],["Median drift",drift===null?'—':`${num(drift,0)} gen`]]}/>
     {delivered<frame.length&&<Caption><b>{frame.length-delivered}</b> transfers never arrived — the destination island had already terminated. A left join keeps them visible.</Caption>}<hr/>
     <div className="two"><div><Chart data={[{type:'heatmap',z:grid,x:islands.map(i=>`→ ${i}`),y:islands.map(i=>`island ${i}`),colorscale:[[0,C.deep],[1,C.mig]],texttemplate:'%{z:.0f}',textfont:{color:C.deep,size:12},hovertemplate:'%{y} %{x}<br>%{z:.0f} individuals<extra></extra>'}]} layout={{title:'Migrants sent, source → destination',yaxis:{autorange:'reversed'},margin:{l:76,r:16,t:56,b:44}}} height={380}/><Caption>A ring topology fills only the off-diagonal band; a fully-connected one fills everything. The shape of this matrix is the topology, recovered from the log.</Caption></div>
       <div><Chart data={[true,false].map((ok)=>{const rows=frame.filter(r=>r.delivered===ok);return {type:'scatter',mode:'markers',name:ok?'delivered':'not delivered',x:rows.map(r=>r.t_rel),y:rows.map(r=>r.source_island),marker:{color:ok?C.mig:C.faint,size:7,symbol:ok?'circle':'x',opacity:.85},customdata:rows.map(r=>[r.dest_island,r.num_migrants]),hovertemplate:'island %{y} → %{customdata[0]}<br>%{customdata[1]} migrants<br>t=%{x:.2f}s<extra></extra>'};})} layout={{title:'Transfers over time',xaxis:{title:'seconds since run start'},yaxis:{title:'source island'},legend:{orientation:'h',y:1,x:0},margin:{l:76,r:16,t:56,b:44}}} height={380}/><Caption>Gaps and clustering here reflect <code>migration_interval</code> and the fact that islands reach their migration points at different wall-clock moments.</Caption></div></div>

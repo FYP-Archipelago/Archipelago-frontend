@@ -42,7 +42,7 @@ For clustered views, set `ARCHIPELAGO_API_URL` to the separately deployed cluste
 
 ## Design
 
-Colour tokens and layouts live in `src/designs.css`. The default is the `workbench` layout on the `pitch` palette; add `?layout=` and `?palette=` to the URL to preview another. Island hues, migration cyan and best-solution pink are data encodings and are shared by every design.
+Colour tokens and the workspace layout live in `src/designs.css`. Island hues, migration cyan and best-solution pink are data encodings and are never themed.
 
 ## Check
 

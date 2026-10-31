@@ -213,7 +213,8 @@ const TEMPLATE = `
       <div class="rail" id="rail">
         <div class="rail-h"><span>View controls</span><label class="help"><input type="checkbox" id="rail-help">Notes</label></div>
 
-        <details class="sec" open><summary>Islands</summary>
+        <details class="sec" name="controls"><summary>Islands</summary>
+          <div class="sec-body">
           <div class="grp">
             <button class="btn-wide" id="b-group" aria-pressed="false">Group by island</button>
             <p class="hint">Each island on its own flat patch of ground, side by side, with migration lifted into arcs between them.</p>
@@ -235,9 +236,11 @@ const TEMPLATE = `
             </div>
             <p class="hint">Two facets, two channels: whichever one colour carries, position carries the other.</p>
           </div>
+          </div>
         </details>
 
-        <details class="sec" open><summary>Layers</summary>
+        <details class="sec" name="controls"><summary>Layers</summary>
+          <div class="sec-body">
           <div class="grp layers">
             <button class="btn-wide" id="t-edges" aria-pressed="true">Trajectory edges</button>
             <button class="btn-wide" id="mig-all" aria-pressed="true">Migration routes</button>
@@ -247,17 +250,20 @@ const TEMPLATE = `
             <button class="btn-wide" id="b-sel" aria-pressed="true">Selection marker</button>
             <p class="hint">Turn trajectory edges off to leave only the clusters and the migration arcs &mdash; the exchange skeleton on its own.</p>
           </div>
+          </div>
         </details>
 
-        <details class="sec" open><summary>Detail</summary>
+        <details class="sec" name="controls"><summary>Filter &amp; detail</summary>
+          <div class="sec-body">
           <div class="grp" id="grp-agg">
             <div class="grp-h"><span>Node detail</span><b id="v-res">medium</b></div>
             <input type="range" id="s-res" min="0" max="4" step="1" value="2" aria-label="Cluster resolution">
             <div class="ends"><span>COARSE</span><span>FINEST</span></div>
           </div>
           <div class="grp">
-            <div class="grp-h"><span>Edge filter</span><b id="v-wt">w &ge; 2</b></div>
+            <div class="grp-h"><span>Hide rare paths</span><b id="v-wt">&ge; 2 visits</b></div>
             <input type="range" id="s-wt" min="1" max="12" step="1" value="2" aria-label="Minimum edge traversal count">
+            <div class="ends"><span>SHOW ALL</span><span>COMMON ONLY</span></div>
           </div>
           <div class="grp">
             <div class="grp-h"><span>Separate islands</span><b id="v-exi">0.00</b></div>
@@ -269,11 +275,13 @@ const TEMPLATE = `
             </div>
             <p class="hint">A cluster that splits as you drag was contested; one that slides intact belonged to a single group.</p>
           </div>
+          </div>
         </details>
 
-        <details class="sec"><summary>Height</summary>
+        <details class="sec" name="controls"><summary>Height</summary>
+          <div class="sec-body">
           <div class="grp">
-            <div class="grp-h"><span>Lift by</span><b id="v-height">fitness</b></div>
+            <div class="grp-h"><span>Height shows</span><b id="v-height">fitness</b></div>
             <div class="seg" role="group" aria-label="Height axis">
               <button id="z-fit" aria-pressed="true">FITNESS</button>
               <button id="z-time" aria-pressed="false">TIME</button>
@@ -290,34 +298,41 @@ const TEMPLATE = `
             <div class="ends"><span>SHORT</span><span>TALL</span></div>
             <p class="hint">What lifts a cluster. Fitness: better sits lower. Time: later sits higher. Evals, links and shared: more sits higher. Flat lays everything on the ground.</p>
           </div>
+          </div>
         </details>
 
-        <details class="sec"><summary>Migration routes <b id="routes-n"></b></summary>
+        <details class="sec" name="controls"><summary>Migration routes <b id="routes-n"></b></summary>
+          <div class="sec-body">
           <div class="grp">
             <div class="chips grid" id="routes"></div>
             <p class="hint">One chip per source&rarr;destination route. Shift-click solos a route to trace a single exchange.</p>
           </div>
+          </div>
         </details>
 
-        <details class="sec"><summary>Jump to best</summary>
+        <details class="sec" name="controls"><summary>Jump to best</summary>
+          <div class="sec-body">
           <div class="grp">
             <div class="chips" id="bests"></div>
             <p class="hint">Flies the camera to that cluster and opens it in the inspector. Rings are island bests, diamonds run bests.</p>
           </div>
+          </div>
         </details>
 
-        <details class="sec"><summary>Appearance</summary>
+        <details class="sec" name="controls"><summary>Appearance</summary>
+          <div class="sec-body">
           <div class="grp">
-            <div class="grp-h"><span>Exposure</span><b id="v-op">1.80</b></div>
+            <div class="grp-h"><span>Brightness</span><b id="v-op">1.80</b></div>
             <input type="range" id="s-op" min="15" max="400" step="5" value="180" aria-label="Density exposure">
-            <div class="grp-h" style="margin-top:10px"><span>Saturation</span><b id="v-dom">1.40</b></div>
+            <div class="grp-h" style="margin-top:10px"><span>Colour strength</span><b id="v-dom">1.40</b></div>
             <input type="range" id="s-dom" min="0" max="300" step="10" value="140" aria-label="Hue saturation">
             <div class="ends"><span>GREY</span><span>VIVID</span></div>
+          </div>
           </div>
         </details>
 
         <div class="grp rail-foot">
-          <button class="btn-wide" id="reset">Reset view</button>
+          <button class="btn-wide" id="reset">Reset all</button>
           <p class="hint">Drag to orbit &middot; shift-drag or right-drag to pan &middot; wheel zooms toward the cursor.</p>
         </div>
       </div>
@@ -335,11 +350,11 @@ const TEMPLATE = `
     <div class="legend-inline" id="legend"></div>
 
     <div class="strip">
-      <div class="stat"><span class="k">STN nodes</span><span class="v" id="k-nodes">&mdash;</span></div>
-      <div class="stat"><span class="k">Edges drawn</span><span class="v" id="k-edges">&mdash;</span></div>
+      <div class="stat"><span class="k">Nodes</span><span class="v" id="k-nodes">&mdash;</span></div>
+      <div class="stat"><span class="k">Search paths shown</span><span class="v" id="k-edges">&mdash;</span></div>
       <div class="stat"><span class="k">Of total</span><span class="v" id="k-pct">&mdash;</span></div>
-      <div class="stat"><span class="k">Overlap</span><span class="v" id="k-share">&mdash;</span></div>
-      <div class="stat"><span class="k">Migrations</span><span class="v" id="k-mig">&mdash;</span></div>
+      <div class="stat"><span class="k">Islands per node</span><span class="v" id="k-share">&mdash;</span></div>
+      <div class="stat"><span class="k">Migrants arrived</span><span class="v" id="k-mig">&mdash;</span></div>
       <div class="stat"><span class="k">Frame</span><span class="v" id="k-fps">&mdash;</span></div>
     </div>
   </div>
@@ -1170,7 +1185,7 @@ export function mountStnViewer(root, cfg) {
   });
   $("s-res").addEventListener("input", e => { applyRes(+e.target.value); });
   $("s-wt").addEventListener("input", e => {
-    state.wt = +e.target.value; $("v-wt").textContent = "w " + GE + " " + state.wt;
+    state.wt = +e.target.value; $("v-wt").textContent = GE + " " + state.wt + " visits";
     buildIndex(); updateStats();
   });
   $("s-op").addEventListener("input", e => {
@@ -1241,7 +1256,7 @@ export function mountStnViewer(root, cfg) {
       aggregate(state.res);
       const mx = Math.max(4, Math.min(24, Math.round(G.maxW * 0.25)));
       $("s-wt").max = mx;
-      if (state.wt > mx) { state.wt = mx; $("s-wt").value = mx; $("v-wt").textContent = "w " + GE + " " + mx; }
+      if (state.wt > mx) { state.wt = mx; $("s-wt").value = mx; $("v-wt").textContent = GE + " " + mx + " visits"; }
       // routes depend on topology, not granularity, so a rebuild keeps them
       if (state.routesOn.length !== G.routes.length) state.routesOn = G.routes.map(() => true);
       buildGeometry(); buildIndex(); buildSelectors(); syncSelectors();
@@ -1294,7 +1309,7 @@ export function mountStnViewer(root, cfg) {
       aggregate(state.res);
       state.routesOn = G.routes.map(() => true);
       $("s-wt").max = Math.max(4, Math.min(24, Math.round(G.maxW * 0.25)));
-      state.wt = 2; $("s-wt").value = 2; $("v-wt").textContent = "w " + GE + " 2";
+      state.wt = 2; $("s-wt").value = 2; $("v-wt").textContent = GE + " 2 visits";
       buildGeometry(); buildIndex(); buildSelectors(); syncSelectors(); buildMarks();
       $("grp-agg").hidden = !!DS.cluster;
       syncHeight();
@@ -1347,7 +1362,7 @@ export function mountStnViewer(root, cfg) {
     if (flyNode >= 0 && flyNode < G.nodeCount && nodeData) {
       const w = worldOf(flyNode), k = 0.14;
       cam.tx += (w[0] - cam.tx) * k; cam.ty += (w[1] - cam.ty) * k; cam.tz += (w[2] - cam.tz) * k;
-      cam.dist += (0.022 - cam.dist) * k;
+      cam.dist += (0.9 - cam.dist) * k;
       if (++flyFrames > 130) flyNode = -1;
     }
 
