@@ -1,0 +1,92 @@
+/* Colour tokens and layouts. <html data-palette data-layout> selects one of each.
+   Island hues, migration cyan and best-solution pink are data encodings, so
+   they stay outside the palettes and never change between designs. */
+:root{
+  --i0:#7ec8ff; --i1:#f2615c; --i2:#18a37a; --i3:#f4d64f; --i4:#c07ae8;
+  --mig:#00e5ff; --best:#ff2e88;
+  --dock:0px;
+  --bg:#0a0b0c; --panel:#121415; --raised:#1c1f21; --line:#2c3033; --ink:#eef0ee; --soft:#adb5b7; --faint:#8d9699;
+  --accent:#d6dbb2; --accent-ink:#0a0b0c; --tint:#23271e; --viz-bg:#000000;
+}
+:root[data-palette=carbon]{--bg:#0a0b0c;--panel:#121415;--raised:#1c1f21;--line:#2c3033;--ink:#eef0ee;--soft:#adb5b7;--faint:#8d9699;--accent:#d6dbb2;--accent-ink:#0a0b0c;--tint:#23271e;--viz-bg:#000000}
+:root[data-palette=graphite]{--bg:#111315;--panel:#191c1f;--raised:#24282c;--line:#34393e;--ink:#eef0ee;--soft:#a2abae;--faint:#8f989c;--accent:#d6dbb2;--accent-ink:#111315;--tint:#33392d;--viz-bg:#060708}
+:root[data-palette=pitch]{--bg:#000000;--panel:#0c0d0d;--raised:#171919;--line:#272a2b;--ink:#f0f1ee;--soft:#a8aeae;--faint:#878e8e;--accent:#d6dbb2;--accent-ink:#000000;--tint:#1c1f17;--viz-bg:#000000}
+:root[data-palette=tidal]{--bg:#070d10;--panel:#0e171b;--raised:#16242a;--line:#24383f;--ink:#e2eeed;--soft:#a3b5ba;--faint:#84989e;--accent:#65d2bd;--accent-ink:#06100f;--tint:#123331;--viz-bg:#03070a}
+:root[data-palette=app-teal]{--bg:#060c0f;--panel:#0c1519;--raised:#142228;--line:#20353d;--ink:#dde8e9;--soft:#9cb2b7;--faint:#7f979d;--accent:#4fbfb3;--accent-ink:#04100f;--tint:#0f2d2c;--viz-bg:#03070a}
+:root[data-palette=midnight]{--bg:#0a0c13;--panel:#12151f;--raised:#1c2130;--line:#2d3347;--ink:#e8edf8;--soft:#a5b2cc;--faint:#8a97b2;--accent:#9cafff;--accent-ink:#0a0c13;--tint:#232a44;--viz-bg:#05060b}
+:root[data-palette=fieldwork]{--bg:#090d0b;--panel:#111814;--raised:#1b241e;--line:#2c3a30;--ink:#e6eee5;--soft:#a3b7a8;--faint:#88a08e;--accent:#abd49b;--accent-ink:#090d0b;--tint:#223425;--viz-bg:#040705}
+:root[data-palette=dusk]{--bg:#0e0b10;--panel:#171219;--raised:#231b26;--line:#382c3c;--ink:#f0e8f1;--soft:#bca9c0;--faint:#9f8ea3;--accent:#dfb1d0;--accent-ink:#0e0b10;--tint:#352535;--viz-bg:#070508}
+:root[data-palette=slate]{--bg:#0b0d0f;--panel:#13161a;--raised:#1d2126;--line:#2e343b;--ink:#eceff2;--soft:#a9b2bb;--faint:#8c96a0;--accent:#b7c2cc;--accent-ink:#0b0d0f;--tint:#22282e;--viz-bg:#050607}
+:root[data-palette=bone]{--bg:#0b0b0a;--panel:#141412;--raised:#1f1e1b;--line:#33322d;--ink:#f1eee6;--soft:#b3afa4;--faint:#938f85;--accent:#e9e4d4;--accent-ink:#0b0b0a;--tint:#2a2822;--viz-bg:#050504}
+
+/* Dense and quiet at rest: page title and question share a line with the run. */
+@media(min-width:901px){
+  /* Workbench: sidebar, controls docked right of the graph. */
+  [data-layout=workbench]{--dock:278px}
+
+  /* Command: one top bar holds navigation and the run, the graph gets the full width. */
+  [data-layout=command]{--dock:278px}
+  [data-layout=command] .app,[data-layout=ledger] .app{display:flex;flex-direction:column}
+  [data-layout=command] aside,[data-layout=ledger] aside{position:static;height:auto;flex-direction:row;align-items:center;gap:20px;padding:0 20px;min-height:54px;overflow:visible;border-right:0;border-bottom:1px solid var(--line)}
+  [data-layout=command] nav,[data-layout=ledger] nav{flex-direction:row;gap:2px}
+  [data-layout=command] .nav-heading,[data-layout=ledger] .nav-heading,
+  [data-layout=command] nav button small,[data-layout=ledger] nav button small{display:none}
+  [data-layout=command] nav button,[data-layout=ledger] nav button{width:auto;grid-template-columns:16px auto;column-gap:7px;padding:7px 10px;font-size:13px;white-space:nowrap}
+  [data-layout=command] .runctx,[data-layout=ledger] .runctx{flex:1;min-width:0;margin:0;padding:0;border:0;flex-direction:row;align-items:center;justify-content:flex-end;gap:10px}
+  [data-layout=command] .runctx label,[data-layout=ledger] .runctx label{flex-direction:row;align-items:center;gap:7px;white-space:nowrap}
+  [data-layout=command] .runctx select,[data-layout=ledger] .runctx select{width:auto;max-width:206px;min-height:30px;padding:3px 7px}
+  [data-layout=command] .run-facts,[data-layout=ledger] .run-facts{display:flex;gap:6px;white-space:nowrap;margin-right:8px}
+  [data-layout=command] .run-facts dd,[data-layout=ledger] .run-facts dd{margin-right:8px}
+  [data-layout=command] .run-facts>:nth-child(-n+6),[data-layout=ledger] .run-facts>:nth-child(-n+6){display:none}
+  [data-layout=command] main,[data-layout=ledger] main{flex:1;padding:14px 20px 12px}
+  [data-layout=command].on-archipelago main,[data-layout=ledger].on-archipelago main{height:calc(100vh - 55px)}
+
+  /* Theatre: the graph takes the window, the chrome floats on it. */
+  [data-layout=theatre]{--dock:0px}
+  [data-layout=theatre] .app{grid-template-columns:60px minmax(0,1fr)}
+  [data-layout=theatre] aside{z-index:6;padding:14px 8px;align-items:center;overflow:visible}
+  [data-layout=theatre] .brand{padding:0}
+  [data-layout=theatre] .brand span,[data-layout=theatre] .brand small,[data-layout=theatre] .nav-heading,[data-layout=theatre] nav button small{display:none}
+  [data-layout=theatre] nav button{display:grid;place-items:center;grid-template-columns:1fr;width:42px;height:38px;padding:0;font-size:0}
+  [data-layout=theatre] .runctx{position:fixed;z-index:6;top:10px;right:14px;margin:0;padding:6px 8px;flex-direction:row;align-items:center;gap:8px;border:1px solid var(--line);border-radius:6px;background:color-mix(in srgb,var(--panel) 88%,transparent);backdrop-filter:blur(10px)}
+  [data-layout=theatre] .runctx label{flex-direction:row;align-items:center;gap:6px;white-space:nowrap}
+  [data-layout=theatre] .runctx select{max-width:180px;min-height:28px;padding:2px 6px}
+  [data-layout=theatre] .run-facts{display:flex;gap:6px;white-space:nowrap;margin-right:4px}
+  [data-layout=theatre] .run-facts>:nth-child(-n+6){display:none}
+  [data-layout=theatre].on-archipelago main{padding:0}
+  [data-layout=theatre].on-archipelago .page-head{position:absolute;z-index:5;left:74px;top:10px;width:470px;display:block;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:color-mix(in srgb,var(--panel) 88%,transparent);backdrop-filter:blur(10px)}
+  [data-layout=theatre].on-archipelago .page-head h1{font-size:17px}
+  [data-layout=theatre].on-archipelago .page-head .question{font-size:13px}
+  [data-layout=theatre].on-archipelago .page-head .eyebrow,[data-layout=theatre].on-archipelago .page-head .reading{display:none}
+  [data-layout=theatre] .rail{top:58px;left:auto;right:14px;width:262px;max-height:calc(100% - 72px)}
+  [data-layout=theatre] .axis{right:292px;top:100px}
+  [data-layout=theatre] .inspect{right:292px}
+  [data-layout=theatre] .viewer{position:relative}
+  [data-layout=theatre] .strip{position:absolute;left:14px;bottom:14px;z-index:4;width:560px;border:1px solid var(--line);border-radius:6px;background:color-mix(in srgb,var(--panel) 88%,transparent);backdrop-filter:blur(10px)}
+  [data-layout=theatre] .stat{min-width:0;padding:7px 10px}
+  [data-layout=theatre] .stat .v{font-size:13px}
+  [data-layout=theatre] .legend-inline{position:absolute;left:14px;bottom:76px;z-index:4;width:560px;padding:6px 10px;border:0;background:none}
+  [data-layout=theatre] .mast-meta{position:absolute;z-index:4;left:74px;top:76px;right:300px;padding:0}
+
+  /* Briefing: a standing reading guide beside the graph, for walking someone through a run. */
+  [data-layout=briefing]{--dock:262px}
+  [data-layout=briefing] .app{grid-template-columns:196px minmax(0,1fr)}
+  [data-layout=briefing] nav button small{display:none}
+  [data-layout=briefing].on-archipelago .page{display:grid;grid-template-columns:238px minmax(0,1fr);column-gap:16px;grid-template-rows:minmax(0,1fr)}
+  [data-layout=briefing].on-archipelago .page-head{display:block;overflow-y:auto;padding:0 2px 0 0}
+  [data-layout=briefing].on-archipelago .page-head h1{margin-bottom:6px}
+  [data-layout=briefing].on-archipelago .page-head .question{color:var(--ink)}
+  [data-layout=briefing].on-archipelago details.reading{display:block}
+  [data-layout=briefing].on-archipelago .reading summary{display:none}
+  [data-layout=briefing].on-archipelago .reading .deck{font-size:13px}
+
+  /* Ledger: figures sit on top of the controls, so the graph runs full height. */
+  [data-layout=ledger]{--dock:286px;--rail-top:112px}
+  [data-layout=ledger] .viewer{position:relative}
+  [data-layout=ledger] .strip{position:absolute;z-index:5;top:0;right:0;width:var(--dock);height:var(--rail-top);display:grid;grid-template-columns:repeat(3,1fr);border:0;border-left:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--panel)}
+  [data-layout=ledger] .stat{min-width:0;padding:7px 11px;border-right:0}
+  [data-layout=ledger] .stat:last-child{display:none}
+  [data-layout=ledger] .stat .k{font-size:8.5px;letter-spacing:.08em}
+  [data-layout=ledger] .stat .v{font-size:13.5px}
+  [data-layout=ledger] .rail{top:104px}
+}
