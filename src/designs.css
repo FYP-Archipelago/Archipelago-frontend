@@ -1,0 +1,74 @@
+/* Carbon colour tokens and the workspace layout.
+   Island hues, migration cyan and best-solution pink are data encodings, so
+   they are never themed. */
+:root{
+  --i0:#7ec8ff; --i1:#f2615c; --i2:#18a37a; --i3:#f4d64f; --i4:#c07ae8;
+  --mig:#00e5ff; --best:#ff2e88;
+  --dock:0px; --tools-left:12px; --tools-top:12px;
+  --bg:#0a0b0c; --panel:#121415; --raised:#1c1f21; --line:#2c3033; --ink:#eef0ee; --soft:#adb5b7; --faint:#8d9699;
+  --accent:#d6dbb2; --accent-ink:#0a0b0c; --tint:#23271e; --viz-bg:#000000;
+}
+
+/* Everything sits on the graph at rest; detail opens one section at a time. */
+.viewer-frame{position:relative;flex:1;display:flex;min-width:0;min-height:0}
+.views{position:absolute;z-index:6;left:var(--tools-left);top:var(--tools-top);display:flex;gap:6px;align-items:center}
+.view-tabs{display:flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:7px;background:var(--panel)}
+.view-tabs button,.adjust{padding:5px 11px;border:0;border-radius:5px;background:none;color:var(--soft);font-size:13px;white-space:nowrap}
+.view-tabs button:hover,.adjust:hover{background:var(--raised);color:var(--ink)}
+.view-tabs button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);font-weight:500}
+.adjust{padding:7px 12px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+.canvas-hint{position:absolute;z-index:4;left:calc(var(--tools-left) + 2px);bottom:50px;margin:0;color:var(--faint);font-size:12px;pointer-events:none}
+
+@media(min-width:901px){
+  /* Top app bar. */
+  .app{display:flex;flex-direction:column}
+  aside{position:static;height:auto;flex-direction:row;align-items:center;gap:20px;padding:0 20px;min-height:54px;overflow:visible;border-right:0;border-bottom:1px solid var(--line)}
+  nav{flex-direction:row;gap:2px}
+  .nav-heading,nav button small{display:none}
+  nav button{width:auto;grid-template-columns:16px auto;column-gap:7px;padding:7px 10px;font-size:13px;white-space:nowrap}
+  .runctx{flex:1;min-width:0;margin:0;padding:0;border:0;flex-direction:row;align-items:center;justify-content:flex-end;gap:10px}
+  main{flex:1;padding:12px 16px 12px}
+  .on-archipelago main{height:calc(100vh - 55px)}
+  .runctx label{flex-direction:row;align-items:center;gap:7px;white-space:nowrap}
+  .runctx select{width:auto;max-width:206px;min-height:30px;padding:3px 7px}
+  .run-facts{position:absolute;top:68px;right:150px;display:flex;gap:5px;white-space:nowrap}
+  .run-facts dd{margin-right:9px}
+
+  /* A slim list always on the right; sections open in place. */
+  :root{--dock:232px}
+  :root .rail{left:auto;right:0;top:0;bottom:0;width:var(--dock);max-height:none;border:0;border-left:1px solid var(--line);border-radius:0;background:var(--panel);backdrop-filter:none;padding:0}
+}
+
+@media(min-width:901px) and (max-width:1400px){
+  .brand small,nav button svg{display:none}
+  nav button{display:block}
+  .runctx select{max-width:150px}
+  .canvas-hint{bottom:82px}
+}
+
+@media(min-width:901px) and (max-width:1120px){
+  .brand span,.runctx label{font-size:0}
+  .runctx select{font-size:12px;max-width:120px}
+  nav button{padding:7px 6px}
+}
+
+@media(max-width:1180px){
+  .run-facts{display:none}
+}
+
+@media(max-width:900px){
+  .views{position:static;flex-wrap:wrap;margin-bottom:8px}
+  .view-tabs{flex-wrap:wrap}
+  .viewer-frame{display:block}
+  .canvas-hint{position:static;margin:0 0 8px}
+}
+
+/* Legend entries for islands double as show/hide switches. */
+.legend-inline span.toggle{cursor:pointer}
+.legend-inline span.toggle:hover{color:var(--ink)}
+.legend-inline span.off{opacity:.4;text-decoration:line-through}
+
+/* Scale study: synthetic data is always labelled, and has no run to choose. */
+.study-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:10px;font-size:13px;color:var(--soft)}
+.synthetic{padding:3px 8px;border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-size:12px;font-weight:500}
+.on-study .runctx{visibility:hidden}

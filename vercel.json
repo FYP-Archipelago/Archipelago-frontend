@@ -1,0 +1,6 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [{ "source": "/api/(.*)", "destination": "/api/index" }],
+  "functions": { "api/index.js": { "includeFiles": "data/**", "memory": 1024, "maxDuration": 30 } }
+}
