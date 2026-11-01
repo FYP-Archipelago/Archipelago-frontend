@@ -39,6 +39,19 @@
   :root .rail{left:auto;right:0;top:0;bottom:0;width:var(--dock);max-height:none;border:0;border-left:1px solid var(--line);border-radius:0;background:var(--panel);backdrop-filter:none;padding:0}
 }
 
+@media(min-width:901px) and (max-width:1400px){
+  .brand small,nav button svg{display:none}
+  nav button{display:block}
+  .runctx select{max-width:150px}
+  .canvas-hint{bottom:82px}
+}
+
+@media(min-width:901px) and (max-width:1120px){
+  .brand span,.runctx label{font-size:0}
+  .runctx select{font-size:12px;max-width:120px}
+  nav button{padding:7px 6px}
+}
+
 @media(max-width:1180px){
   .run-facts{display:none}
 }
@@ -54,3 +67,8 @@
 .legend-inline span.toggle{cursor:pointer}
 .legend-inline span.toggle:hover{color:var(--ink)}
 .legend-inline span.off{opacity:.4;text-decoration:line-through}
+
+/* Scale study: synthetic data is always labelled, and has no run to choose. */
+.study-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:10px;font-size:13px;color:var(--soft)}
+.synthetic{padding:3px 8px;border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-size:12px;font-weight:500}
+.on-study .runctx{visibility:hidden}

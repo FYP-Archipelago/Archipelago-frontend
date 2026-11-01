@@ -1229,7 +1229,7 @@ export function mountStnViewer(root, cfg) {
     } else {
       state.exI = state.exIBefore;
       state.hs = state.hsBefore;
-      camGoal = { el: 0.30, dist: 3.15 };
+      camGoal = { el: 0.30, dist: DS.runs > 1 ? 4.3 : 3.15 };
     }
     $("s-exi").value = state.exI; $("v-exi").textContent = (state.exI / 100).toFixed(2);
     $("s-hs").value = state.hs; $("v-hs").textContent = (state.hs / 100).toFixed(2);
@@ -1241,7 +1241,7 @@ export function mountStnViewer(root, cfg) {
     syncSelectors();
   });
   $("reset").addEventListener("click", () => {
-    cam.az = 0.62; cam.el = 0.30; cam.dist = 3.15; cam.tx = cam.ty = cam.tz = 0;
+    cam.az = DS.runs > 1 ? 1.14 : 0.62; cam.el = 0.30; cam.dist = DS.runs > 1 ? 4.3 : 3.15; cam.tx = cam.ty = cam.tz = 0;
     zoomTarget = 0;
   });
 
@@ -1298,9 +1298,9 @@ export function mountStnViewer(root, cfg) {
       state.colourBy = multi ? "run" : "island";
       state.exR = multi ? 100 : 0;
       state.exI = 0;
-      cam.az = 0.62; cam.el = 0.30; cam.tx = cam.ty = cam.tz = 0;
+      cam.az = multi ? 1.14 : 0.62; cam.el = 0.30; cam.tx = cam.ty = cam.tz = 0;
       cam.dist = multi ? 4.3 : 3.15;
-      $("s-exr").value = state.exR; $("v-exr").textContent = (state.exR / 100).toFixed(2);
+      $("s-exr").defaultValue = state.exR; $("s-exr").value = state.exR; $("v-exr").textContent = (state.exR / 100).toFixed(2);
       $("s-exi").value = 0; $("v-exi").textContent = "0.00";
       $("c-isl").setAttribute("aria-pressed", String(!multi));
       $("c-run").setAttribute("aria-pressed", String(multi));
