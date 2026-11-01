@@ -52,6 +52,9 @@ function Viewer({ mount }) {
   const drive=fn=>{ driving.current=true; fn(); driving.current=false; syncLegend(); };
   const pick=id=>{ drive(()=>showView(id)); setView(id); };
   const reset=()=>{ drive(resetAll); setView('overview'); setChanged(false); };
+  useEffect(()=>{ const onKey=e=>{ if(e.ctrlKey||e.metaKey||e.altKey||e.target.closest('input,select,textarea')) return; const key=e.key.toLowerCase();
+    if(key==='b') pick('best'); else if(key==='r') reset(); else if(key==='s') document.getElementById('save-img')?.click(); else if(key==='escape') document.getElementById('ins-x')?.click(); else if(key==='?') document.getElementById('rail-help')?.click(); };
+    window.addEventListener('keydown',onKey); return ()=>window.removeEventListener('keydown',onKey); },[]);
   const manual=e=>{ if(driving.current) return; const control=e.target.closest('.rail button,.rail input[type=range]'); if(!control) return; if(control.id==='reset') return; if(['b-group','t-edges','mig-all'].includes(control.id)) setView(null); setChanged(true); };
   const click=e=>{ if(e.target.closest('#reset')&&!driving.current) return reset(); const entry=e.target.closest('#legend span.toggle'); if(entry){ const n=entry.textContent.match(/^Island (\d+)/)[1]; [...document.querySelectorAll('#islands button')].find(c=>c.textContent.trim()===n)?.click(); } syncLegend(); };
   return <div className="viewer-frame" onClickCapture={manual} onInputCapture={manual} onClick={click}><div className="views"><div className="view-tabs" role="group" aria-label="Choose a view">{VIEWS.map(([id,label,hint])=><button key={id} title={hint} aria-pressed={view===id} onClick={()=>pick(id)}>{label}</button>)}</div>{changed&&<button className="adjust" onClick={reset}>Reset all</button>}</div><p className="canvas-hint">Drag to rotate · Scroll to zoom · Click a node for details</p><div className="viewer-host" ref={ref}/></div>;

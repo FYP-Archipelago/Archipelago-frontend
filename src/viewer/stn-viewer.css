@@ -268,3 +268,5 @@ input[type=range]::-moz-range-thumb{width:13px; height:13px; border:0; border-ra
 .sec .chip{padding:7px 9px}
 .sec .chip .lb{font-size:11.5px}
 .sec .chip .sw{width:10px; height:10px}
+.legend-inline i.fit{width:44px; height:6px; border:0; border-radius:2px; background:linear-gradient(90deg,#fce824,#21a887,#451f78)}
+.hover-tip{position:absolute; left:0; top:0; z-index:5; pointer-events:none; padding:4px 8px; border:1px solid var(--line); border-radius:4px; background:var(--panel); color:var(--ink); font-size:12px; white-space:nowrap}

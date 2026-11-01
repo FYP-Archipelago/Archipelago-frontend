@@ -34,7 +34,7 @@ uniform mat4 uVP; uniform vec3 uZMix; uniform vec3 uZMix2; uniform float uPScale
 uniform float uExI; uniform float uExR;
 uniform vec3 uCol[${MAXG}]; uniform float uAlpha[${MAXG}];
 uniform float uBase; uniform float uFogN; uniform float uFogF;
-uniform float uContest; uniform float uFlat; uniform float uHS;
+uniform float uContest; uniform float uFlat; uniform float uHS; uniform float uByFit;
 out vec3 vC; out float vA; out float vS;
 ` + PLACE + `
 void main(){
@@ -43,7 +43,10 @@ void main(){
   vec4 cp = uVP * vec4(p, 1.0);
   gl_Position = cp;
   int k = int(aGrp + 0.5);
-  vC = uCol[k];
+  float rank = clamp((aZ.x + 0.9) / 1.8, 0.0, 1.0);          // 0 is the best fitness
+  vec3 ramp = rank < 0.5 ? mix(vec3(0.99, 0.91, 0.14), vec3(0.13, 0.66, 0.53), rank * 2.0)
+                         : mix(vec3(0.13, 0.66, 0.53), vec3(0.27, 0.12, 0.47), rank * 2.0 - 1.0);
+  vC = mix(uCol[k], ramp, uByFit);
   float d = max(cp.w, 1e-6);
   float fog = 1.0 - clamp((d - uFogN)/(uFogF - uFogN), 0.0, 1.0);
   float hot = smoothstep(0.24, 0.55, aShared);
@@ -228,11 +231,12 @@ const TEMPLATE = `
             <div class="chips" id="islands"></div>
             <p class="hint">One chip per island &mdash; per run, when there is more than one. Click to mute, shift-click to solo just that one.</p>
           </div>
-          <div class="grp" id="grp-colour" hidden>
+          <div class="grp" id="grp-colour">
             <div class="grp-h"><span>Colour by</span></div>
             <div class="seg" role="group" aria-label="Colour by">
               <button id="c-isl" aria-pressed="true">ISLAND</button>
               <button id="c-run" aria-pressed="false">RUN</button>
+              <button id="c-fit" aria-pressed="false">FITNESS</button>
             </div>
             <p class="hint">Two facets, two channels: whichever one colour carries, position carries the other.</p>
           </div>
@@ -327,19 +331,23 @@ const TEMPLATE = `
             <div class="grp-h" style="margin-top:10px"><span>Colour strength</span><b id="v-dom">1.40</b></div>
             <input type="range" id="s-dom" min="0" max="300" step="10" value="140" aria-label="Hue saturation">
             <div class="ends"><span>GREY</span><span>VIVID</span></div>
+            <div class="grp-h" style="margin-top:10px"><span>Node size</span><b id="v-ns">1.00</b></div>
+            <input type="range" id="s-ns" min="50" max="300" step="10" value="100" aria-label="Node size">
           </div>
           </div>
         </details>
 
         <div class="grp rail-foot">
           <button class="btn-wide" id="reset">Reset all</button>
-          <p class="hint">Drag to orbit &middot; shift-drag or right-drag to pan &middot; wheel zooms toward the cursor.</p>
+          <button class="btn-wide" id="save-img" style="margin-top:6px">Save image</button>
+          <p class="hint">Drag to orbit &middot; shift-drag or right-drag to pan &middot; wheel zooms toward the cursor. Keys: B best solution, R reset, S save image, Esc clear selection, ? notes.</p>
         </div>
       </div>
 
       <div class="axis" id="axis"><span id="ax-top">WORSE</span><div class="bar"></div><span id="ax-bot">BETTER</span></div>
       <div id="plabels"></div>
       <div id="marks"></div>
+      <div class="hover-tip" id="hover-tip" hidden></div>
       <div class="selmark" id="selmark" hidden><i></i><i></i><i></i><i></i></div>
       <div class="inspect" id="inspect">
         <div class="ins-h"><b id="ins-title">Click a node to inspect it</b><button id="ins-x" aria-label="Clear selection" hidden>&times;</button></div>
@@ -738,7 +746,7 @@ export function mountStnViewer(root, cfg) {
 
   /* ── state + camera ──────────────────────────────────────────── */
   const state = {
-    ds: 0, res: 2, wt: 2, zMode: 0, op: 180, dom: 140, exI: 0, exR: 0,
+    ds: 0, res: 2, wt: 2, ns: 100, zMode: 0, op: 180, dom: 140, exI: 0, exR: 0,
     colourBy: "island", grpOn: [], routesOn: [],
     contest: false, edges: true, selMark: true, bestIsl: true, bestRun: true,
     group: false, exIBefore: 0, flat: false, hs: 100, hsBefore: 100
@@ -788,8 +796,20 @@ export function mountStnViewer(root, cfg) {
     canvas.setPointerCapture(ev.pointerId);
     lastInteract = performance.now();
   });
+  let hoverAt = 0;
+  function showHover(ev) {
+    const now = performance.now(), tip = $("hover-tip");
+    if (now - hoverAt < 60 || !G) return;
+    hoverAt = now;
+    const r = canvas.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top, i = pickAt(x, y);
+    tip.hidden = i < 0;
+    if (i < 0) return;
+    tip.textContent = "Island " + islLabel(gIsl[G.pGrp[i]]) + " · fitness " + ((DS.fitSign || 1) * G.pf[i]).toFixed(4) + " · " + G.pVis[i] + (G.pVis[i] === 1 ? " evaluation" : " evaluations");
+    tip.style.transform = "translate(" + Math.min(x + 14, r.width - 250) + "px," + (y + 14) + "px)";
+  }
+  canvas.addEventListener("pointerleave", () => { $("hover-tip").hidden = true; });
   canvas.addEventListener("pointermove", ev => {
-    if (!dragging) return;
+    if (!dragging) return showHover(ev);
     const dx = ev.clientX - lx, dy = ev.clientY - ly;
     travel += Math.abs(dx) + Math.abs(dy);
     if (dragging === 1) {
@@ -993,7 +1013,7 @@ export function mountStnViewer(root, cfg) {
         syncSelectors();
       }));
     }
-    $("grp-colour").hidden = DS.runs < 2;
+    $("c-run").hidden = DS.runs < 2;
     $("grp-exr").hidden = DS.runs < 2;
 
     // islands
@@ -1059,7 +1079,9 @@ export function mountStnViewer(root, cfg) {
   function updateLegend() {
     const L = $("legend"); L.innerHTML = "";
     const add = html => { const s = document.createElement("span"); s.innerHTML = html; L.appendChild(s); };
-    if (state.colourBy === "run" && DS.runs > 1) {
+    if (state.colourBy === "fitness") {
+      add('<i class="fit"></i>Best to worst fitness');
+    } else if (state.colourBy === "run" && DS.runs > 1) {
       for (let r = 0; r < DS.runs; r++) add('<i style="border-color:' + hex(PAL5[r % 5]) + '"></i>Run ' + r);
     } else if (DS.isl <= 6) {
       for (let i = 0; i < DS.isl; i++) add('<i style="border-color:' + hex(groupColour(i)) + '"></i>Island ' + islLabel(i));
@@ -1179,14 +1201,17 @@ export function mountStnViewer(root, cfg) {
     syncHeight();
   }));
   $("z-flat").addEventListener("click", () => { state.flat = !state.flat; syncHeight(); });
-  segment(["c-isl", "c-run"], () => state.colourBy === "island" ? 0 : 1, i => {
-    state.colourBy = i === 0 ? "island" : "run";
+  segment(["c-isl", "c-run", "c-fit"], () => ["island", "run", "fitness"].indexOf(state.colourBy), i => {
+    state.colourBy = ["island", "run", "fitness"][i];
     buildSelectors(); syncSelectors();
   });
   $("s-res").addEventListener("input", e => { applyRes(+e.target.value); });
   $("s-wt").addEventListener("input", e => {
     state.wt = +e.target.value; $("v-wt").textContent = GE + " " + state.wt + " visits";
     buildIndex(); updateStats();
+  });
+  $("s-ns").addEventListener("input", e => {
+    state.ns = +e.target.value; $("v-ns").textContent = (state.ns / 100).toFixed(2);
   });
   $("s-op").addEventListener("input", e => {
     state.op = +e.target.value; $("v-op").textContent = (state.op / 100).toFixed(2);
@@ -1304,6 +1329,7 @@ export function mountStnViewer(root, cfg) {
       $("s-exi").value = 0; $("v-exi").textContent = "0.00";
       $("c-isl").setAttribute("aria-pressed", String(!multi));
       $("c-run").setAttribute("aria-pressed", String(multi));
+      $("c-fit").setAttribute("aria-pressed", "false");
       $("cap").innerHTML = CAP;
       computeOffsets();
       aggregate(state.res);
@@ -1331,7 +1357,8 @@ export function mountStnViewer(root, cfg) {
   const bgHex = getComputedStyle(root).getPropertyValue('--viz-bg').trim() || '#000000';
   const BG = [1, 3, 5].map(i => parseInt(bgHex.slice(i, i + 2), 16) / 255);
 
-  let running = false, raf = 0;
+  let running = false, raf = 0, wantImage = false;
+  $("save-img").addEventListener("click", () => { wantImage = true; });
   function startLoop() { if (!running) { running = true; raf = requestAnimationFrame(frame); } }
 
   function frame(now) {
@@ -1404,6 +1431,7 @@ export function mountStnViewer(root, cfg) {
       gl.uniform1f(P.u.uContest, contest);
       gl.uniform1f(P.u.uFlat, flatShown);
       gl.uniform1f(P.u.uHS, hsShown);
+      gl.uniform1f(P.u.uByFit, state.colourBy === "fitness" ? 1 : 0);
       gl.uniform1f(P.u.uPScale, pscale);
     }
 
@@ -1415,7 +1443,7 @@ export function mountStnViewer(root, cfg) {
     }
 
     gl.blendFunc(useHDR ? gl.ONE : gl.SRC_ALPHA, gl.ONE);
-    setGraph(pPoint, (state.edges ? 0.14 : 0.42) * nodeGain, 1.35 * dpr(), contestShown);
+    setGraph(pPoint, (state.edges ? 0.14 : 0.42) * nodeGain, 1.35 * dpr() * state.ns / 100, contestShown);
     gl.bindVertexArray(vaoNodes);
     gl.drawArrays(gl.POINTS, 0, G.nodeCount);
 
@@ -1506,6 +1534,11 @@ export function mountStnViewer(root, cfg) {
     if (now - fpsLast > 500) {
       $("k-fps").innerHTML = (fpsN / ((now - fpsLast) / 1000)).toFixed(0) + '<small> fps</small>';
       fpsN = 0; fpsLast = now;
+    }
+    if (wantImage) {                                    // the drawing buffer is only readable before the frame ends
+      wantImage = false;
+      const a = document.createElement("a");
+      a.download = "archipelago-view.png"; a.href = canvas.toDataURL("image/png"); a.click();
     }
     raf = requestAnimationFrame(frame);
   }

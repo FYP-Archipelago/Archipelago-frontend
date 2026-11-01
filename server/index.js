@@ -3,12 +3,15 @@ import path from 'node:path';
 import { readFile, writeFile, mkdir, readdir, rm, stat } from 'node:fs/promises';
 import JSZip from 'jszip';
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { DATA_ROOT, FILES, listRuns, loadRun, safeRunPath } from './run.js';
 import { buildPayload, withClusters } from './payload.js';
 
 const PORT = Number(process.env.PORT || process.env.ARCHIPELAGO_REWRITE_PORT || 4174);
 const HOST = process.env.HOST || '127.0.0.1';
 const API_URL = process.env.ARCHIPELAGO_API_URL || 'http://127.0.0.1:8000';
+// Public deployments serve the bundled runs only: no writes, and no fetching caller-supplied URLs.
+const READ_ONLY = Boolean(process.env.VERCEL);
 const DIST_ROOT = path.resolve(import.meta.dirname, '../dist');
 const cache = new Map();
 const resultRoot = path.join(DATA_ROOT, '.cluster_results');
@@ -106,13 +109,13 @@ async function clustering(id, stages, parameters, url) {
   throw Error('Clustering timed out');
 }
 
-await mkdir(DATA_ROOT, { recursive: true });
-
-http.createServer(async (req, res) => {
+export async function handler(req, res) {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const parts = url.pathname.split('/').filter(Boolean);
     if (parts[0] !== 'api') return staticFile(req, res, url.pathname);
+    if (READ_ONLY && req.method !== 'GET') return fail(res, 'This shared demo is read-only. Run the app locally to add or cluster runs.', 403);
+    if (READ_ONLY && parts[1] === 'health') return json(res, { available: false });
     if (req.method === 'GET' && parts[1] === 'status') return json(res, { ok: true });
     if (req.method === 'GET' && parts[1] === 'config') return json(res, { clusteringUrl: API_URL });
     if (req.method === 'GET' && parts[1] === 'runs' && !parts[2]) return json(res, await listRuns());
@@ -160,4 +163,9 @@ http.createServer(async (req, res) => {
     }
     return fail(res, 'Not found', 404);
   } catch (error) { fail(res, error, error.code === 'ENOENT' ? 404 : 400); }
-}).listen(PORT, HOST, () => console.log(`Archipelago JS on http://${HOST}:${PORT}`));
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  await mkdir(DATA_ROOT, { recursive: true });
+  http.createServer(handler).listen(PORT, HOST, () => console.log(`Archipelago JS on http://${HOST}:${PORT}`));
+}
