@@ -40,6 +40,10 @@ docker run -p 4174:4174 -v archipelago-runs:/app/data archipelago-js
 
 For clustered views, set `ARCHIPELAGO_API_URL` to the separately deployed clustering service URL. The Runs page can also override it for the current session.
 
+## Design
+
+Colour tokens and the workspace layout live in `src/designs.css`. Island hues, migration cyan and best-solution pink are data encodings and are never themed.
+
 ## Check
 
 ```bash

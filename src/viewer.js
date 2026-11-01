@@ -1,4 +1,5 @@
 import { mountStnViewer } from './viewer/stn-viewer.js';
+import { studyDataset } from './viewer/study-data.js';
 
 function b64(text, Ctor) {
   const bin = atob(text); const bytes = new Uint8Array(bin.length);
@@ -27,4 +28,8 @@ export function toDataset(p) {
 
 export function mountViewer(element, payload) {
   return mountStnViewer(element, { datasets: [{ tag: payload.tag, load: () => toDataset(payload) }] });
+}
+
+export function mountStudy(element, ds) {
+  return mountStnViewer(element, { datasets: [studyDataset(ds)] });
 }

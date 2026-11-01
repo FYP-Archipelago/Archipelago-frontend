@@ -34,7 +34,7 @@ uniform mat4 uVP; uniform vec3 uZMix; uniform vec3 uZMix2; uniform float uPScale
 uniform float uExI; uniform float uExR;
 uniform vec3 uCol[${MAXG}]; uniform float uAlpha[${MAXG}];
 uniform float uBase; uniform float uFogN; uniform float uFogF;
-uniform float uContest; uniform float uFlat; uniform float uHS;
+uniform float uContest; uniform float uFlat; uniform float uHS; uniform float uByFit;
 out vec3 vC; out float vA; out float vS;
 ` + PLACE + `
 void main(){
@@ -43,7 +43,10 @@ void main(){
   vec4 cp = uVP * vec4(p, 1.0);
   gl_Position = cp;
   int k = int(aGrp + 0.5);
-  vC = uCol[k];
+  float rank = clamp((aZ.x + 0.9) / 1.8, 0.0, 1.0);          // 0 is the best fitness
+  vec3 ramp = rank < 0.5 ? mix(vec3(0.99, 0.91, 0.14), vec3(0.13, 0.66, 0.53), rank * 2.0)
+                         : mix(vec3(0.13, 0.66, 0.53), vec3(0.27, 0.12, 0.47), rank * 2.0 - 1.0);
+  vC = mix(uCol[k], ramp, uByFit);
   float d = max(cp.w, 1e-6);
   float fog = 1.0 - clamp((d - uFogN)/(uFogF - uFogN), 0.0, 1.0);
   float hot = smoothstep(0.24, 0.55, aShared);
@@ -211,115 +214,143 @@ const TEMPLATE = `
       <div class="stage-note" id="note">LOADING&hellip;</div>
 
       <div class="rail" id="rail">
-        <div class="grp">
-          <button class="btn-wide" id="b-group" aria-pressed="false">Group by island</button>
-          <p class="hint">Each island on its own flat patch of ground, side by side, with migration lifted into arcs between them.</p>
-        </div>
+        <div class="rail-h"><span>View controls</span><label class="help"><input type="checkbox" id="rail-help">Notes</label></div>
 
-        <div class="grp" id="grp-runs" hidden>
-          <div class="grp-h"><span>Runs</span></div>
-          <div class="chips" id="runs"></div>
-        </div>
-
-        <div class="grp">
-          <div class="grp-h"><span id="islands-h">Islands</span></div>
-          <div class="chips" id="islands"></div>
-          <p class="hint">One chip per island &mdash; per run, when there is more than one. Click to mute, shift-click to solo just that one.</p>
-        </div>
-
-        <div class="grp" id="grp-colour" hidden>
-          <div class="grp-h"><span>Colour by</span></div>
-          <div class="seg" role="group" aria-label="Colour by">
-            <button id="c-isl" aria-pressed="true">ISLAND</button>
-            <button id="c-run" aria-pressed="false">RUN</button>
+        <details class="sec" name="controls"><summary>Islands</summary>
+          <div class="sec-body">
+          <div class="grp">
+            <button class="btn-wide" id="b-group" aria-pressed="false">Group by island</button>
+            <p class="hint">Each island on its own flat patch of ground, side by side, with migration lifted into arcs between them.</p>
           </div>
-          <p class="hint">Two facets, two channels: whichever one colour carries, position carries the other.</p>
-        </div>
-
-        <div class="grp">
-          <div class="grp-h"><span>Migration routes</span><b id="routes-n"></b></div>
-          <div class="chips grid" id="routes"></div>
-          <button class="btn-wide" id="mig-all" style="margin-top:7px">All / none</button>
-          <p class="hint">One chip per source&rarr;destination route. Shift-click solos a route to trace a single exchange.</p>
-        </div>
-
-        <div class="grp" id="grp-agg">
-          <div class="grp-h"><span>01 &middot; Aggregate</span><b id="v-res">medium</b></div>
-          <input type="range" id="s-res" min="0" max="4" step="1" value="2" aria-label="Cluster resolution">
-          <div class="ends"><span>COARSE</span><span>FINEST</span></div>
-        </div>
-
-        <div class="grp">
-          <div class="grp-h"><span>02 &middot; Backbone</span><b id="v-wt">w &ge; 1</b></div>
-          <input type="range" id="s-wt" min="1" max="12" step="1" value="1" aria-label="Minimum edge traversal count">
-        </div>
-
-        <div class="grp">
-          <div class="grp-h"><span>03 &middot; Separate islands</span><b id="v-exi">0.00</b></div>
-          <input type="range" id="s-exi" min="0" max="100" step="1" value="0" aria-label="Island separation">
-          <div class="ends"><span>MERGED</span><span>SEPARATE</span></div>
-          <div id="grp-exr" hidden>
-            <div class="grp-h" style="margin-top:10px"><span>Separate runs</span><b id="v-exr">0.00</b></div>
-            <input type="range" id="s-exr" min="0" max="100" step="1" value="0" aria-label="Run separation">
+          <div class="grp" id="grp-runs" hidden>
+            <div class="grp-h"><span>Runs</span></div>
+            <div class="chips" id="runs"></div>
           </div>
-          <p class="hint">A cluster that splits as you drag was contested; one that slides intact belonged to a single group.</p>
-        </div>
-
-        <div class="grp">
-          <div class="grp-h"><span>04 &middot; Height</span><b id="v-height">fitness</b></div>
-          <div class="seg" role="group" aria-label="Height axis">
-            <button id="z-fit" aria-pressed="true">FITNESS</button>
-            <button id="z-time" aria-pressed="false">TIME</button>
-            <button id="z-isle" aria-pressed="false">ISLAND</button>
+          <div class="grp">
+            <div class="grp-h"><span id="islands-h">Islands</span></div>
+            <div class="chips" id="islands"></div>
+            <p class="hint">One chip per island &mdash; per run, when there is more than one. Click to mute, shift-click to solo just that one.</p>
           </div>
-          <div class="seg" role="group" aria-label="More height metrics" style="margin-top:3px">
-            <button id="z-vis" aria-pressed="false">EVALS</button>
-            <button id="z-deg" aria-pressed="false">LINKS</button>
-            <button id="z-shr" aria-pressed="false">SHARED</button>
-            <button id="z-flat" aria-pressed="false">FLAT</button>
+          <div class="grp" id="grp-colour">
+            <div class="grp-h"><span>Colour by</span></div>
+            <div class="seg" role="group" aria-label="Colour by">
+              <button id="c-isl" aria-pressed="true">ISLAND</button>
+              <button id="c-run" aria-pressed="false">RUN</button>
+              <button id="c-fit" aria-pressed="false">FITNESS</button>
+            </div>
+            <p class="hint">Two facets, two channels: whichever one colour carries, position carries the other.</p>
           </div>
-          <div class="grp-h" style="margin-top:10px"><span>Height scale</span><b id="v-hs">1.00</b></div>
-          <input type="range" id="s-hs" min="5" max="150" step="5" value="100" aria-label="Height scale">
-          <div class="ends"><span>SHORT</span><span>TALL</span></div>
-          <p class="hint">What lifts a cluster. Fitness: better sits lower. Time: later sits higher. Evals, links and shared: more sits higher. Flat lays everything on the ground.</p>
-        </div>
+          </div>
+        </details>
 
-        <div class="grp">
-          <div class="grp-h"><span>05 &middot; Exposure</span><b id="v-op">1.20</b></div>
-          <input type="range" id="s-op" min="15" max="400" step="5" value="120" aria-label="Density exposure">
-          <div class="grp-h" style="margin-top:10px"><span>Saturation</span><b id="v-dom">1.40</b></div>
-          <input type="range" id="s-dom" min="0" max="300" step="10" value="140" aria-label="Hue saturation">
-          <div class="ends"><span>GREY</span><span>VIVID</span></div>
-        </div>
+        <details class="sec" name="controls"><summary>Layers</summary>
+          <div class="sec-body">
+          <div class="grp layers">
+            <button class="btn-wide" id="t-edges" aria-pressed="true">Trajectory edges</button>
+            <button class="btn-wide" id="mig-all" aria-pressed="true">Migration routes</button>
+            <button class="btn-wide" id="b-isl" aria-pressed="true">Island bests</button>
+            <button class="btn-wide" id="b-run" aria-pressed="true">Run bests</button>
+            <button class="btn-wide" id="contest" aria-pressed="false">Contested clusters</button>
+            <button class="btn-wide" id="b-sel" aria-pressed="true">Selection marker</button>
+            <p class="hint">Turn trajectory edges off to leave only the clusters and the migration arcs &mdash; the exchange skeleton on its own.</p>
+          </div>
+          </div>
+        </details>
 
-        <div class="grp">
-          <div class="grp-h"><span>06 &middot; Highlight</span></div>
-          <button class="btn-wide" id="b-isl" aria-pressed="true">Island bests</button>
-          <button class="btn-wide" id="b-run" aria-pressed="true" style="margin-top:6px">Run bests</button>
-          <button class="btn-wide" id="contest" aria-pressed="false" style="margin-top:6px">Contested clusters</button>
-          <button class="btn-wide" id="t-edges" aria-pressed="true" style="margin-top:6px">Trajectory edges</button>
-          <button class="btn-wide" id="b-sel" aria-pressed="true" style="margin-top:6px">Selection marker</button>
-          <p class="hint">Turn trajectory edges off to leave only the clusters and the migration arcs &mdash; the exchange skeleton on its own.</p>
-        </div>
+        <details class="sec" name="controls"><summary>Filter &amp; detail</summary>
+          <div class="sec-body">
+          <div class="grp" id="grp-agg">
+            <div class="grp-h"><span>Node detail</span><b id="v-res">medium</b></div>
+            <input type="range" id="s-res" min="0" max="4" step="1" value="2" aria-label="Cluster resolution">
+            <div class="ends"><span>COARSE</span><span>FINEST</span></div>
+          </div>
+          <div class="grp">
+            <div class="grp-h"><span>Hide rare paths</span><b id="v-wt">&ge; 2 visits</b></div>
+            <input type="range" id="s-wt" min="1" max="12" step="1" value="2" aria-label="Minimum edge traversal count">
+            <div class="ends"><span>SHOW ALL</span><span>COMMON ONLY</span></div>
+          </div>
+          <div class="grp">
+            <div class="grp-h"><span>Separate islands</span><b id="v-exi">0.00</b></div>
+            <input type="range" id="s-exi" min="0" max="100" step="1" value="0" aria-label="Island separation">
+            <div class="ends"><span>MERGED</span><span>SEPARATE</span></div>
+            <div id="grp-exr" hidden>
+              <div class="grp-h" style="margin-top:10px"><span>Separate runs</span><b id="v-exr">0.00</b></div>
+              <input type="range" id="s-exr" min="0" max="100" step="1" value="0" aria-label="Run separation">
+            </div>
+            <p class="hint">A cluster that splits as you drag was contested; one that slides intact belonged to a single group.</p>
+          </div>
+          </div>
+        </details>
 
-        <div class="grp">
-          <div class="grp-h"><span>Jump to best</span></div>
-          <div class="chips" id="bests"></div>
-          <p class="hint">Flies the camera to that cluster and opens it in the inspector. Rings are island bests, diamonds run bests.</p>
-        </div>
+        <details class="sec" name="controls"><summary>Height</summary>
+          <div class="sec-body">
+          <div class="grp">
+            <div class="grp-h"><span>Height shows</span><b id="v-height">fitness</b></div>
+            <div class="seg" role="group" aria-label="Height axis">
+              <button id="z-fit" aria-pressed="true">FITNESS</button>
+              <button id="z-time" aria-pressed="false">TIME</button>
+              <button id="z-isle" aria-pressed="false">ISLAND</button>
+            </div>
+            <div class="seg" role="group" aria-label="More height metrics" style="margin-top:3px">
+              <button id="z-vis" aria-pressed="false">EVALS</button>
+              <button id="z-deg" aria-pressed="false">LINKS</button>
+              <button id="z-shr" aria-pressed="false">SHARED</button>
+              <button id="z-flat" aria-pressed="false">FLAT</button>
+            </div>
+            <div class="grp-h" style="margin-top:10px"><span>Height scale</span><b id="v-hs">1.00</b></div>
+            <input type="range" id="s-hs" min="5" max="150" step="5" value="100" aria-label="Height scale">
+            <div class="ends"><span>SHORT</span><span>TALL</span></div>
+            <p class="hint">What lifts a cluster. Fitness: better sits lower. Time: later sits higher. Evals, links and shared: more sits higher. Flat lays everything on the ground.</p>
+          </div>
+          </div>
+        </details>
 
-        <div class="grp">
-          <button class="btn-wide" id="reset">Reset view</button>
-          <p class="hint">Drag to orbit &middot; shift-drag or right-drag to pan &middot; wheel zooms toward the cursor.</p>
+        <details class="sec" name="controls"><summary>Migration routes <b id="routes-n"></b></summary>
+          <div class="sec-body">
+          <div class="grp">
+            <div class="chips grid" id="routes"></div>
+            <p class="hint">One chip per source&rarr;destination route. Shift-click solos a route to trace a single exchange.</p>
+          </div>
+          </div>
+        </details>
+
+        <details class="sec" name="controls"><summary>Jump to best</summary>
+          <div class="sec-body">
+          <div class="grp">
+            <div class="chips" id="bests"></div>
+            <p class="hint">Flies the camera to that cluster and opens it in the inspector. Rings are island bests, diamonds run bests.</p>
+          </div>
+          </div>
+        </details>
+
+        <details class="sec" name="controls"><summary>Appearance</summary>
+          <div class="sec-body">
+          <div class="grp">
+            <div class="grp-h"><span>Brightness</span><b id="v-op">1.80</b></div>
+            <input type="range" id="s-op" min="15" max="400" step="5" value="180" aria-label="Density exposure">
+            <div class="grp-h" style="margin-top:10px"><span>Colour strength</span><b id="v-dom">1.40</b></div>
+            <input type="range" id="s-dom" min="0" max="300" step="10" value="140" aria-label="Hue saturation">
+            <div class="ends"><span>GREY</span><span>VIVID</span></div>
+            <div class="grp-h" style="margin-top:10px"><span>Node size</span><b id="v-ns">1.00</b></div>
+            <input type="range" id="s-ns" min="50" max="300" step="10" value="100" aria-label="Node size">
+          </div>
+          </div>
+        </details>
+
+        <div class="grp rail-foot">
+          <button class="btn-wide" id="reset">Reset all</button>
+          <button class="btn-wide" id="save-img" style="margin-top:6px">Save image</button>
+          <p class="hint">Drag to orbit &middot; shift-drag or right-drag to pan &middot; wheel zooms toward the cursor. Keys: B best solution, R reset, S save image, Esc clear selection, ? notes.</p>
         </div>
       </div>
 
       <div class="axis" id="axis"><span id="ax-top">WORSE</span><div class="bar"></div><span id="ax-bot">BETTER</span></div>
       <div id="plabels"></div>
       <div id="marks"></div>
+      <div class="hover-tip" id="hover-tip" hidden></div>
       <div class="selmark" id="selmark" hidden><i></i><i></i><i></i><i></i></div>
       <div class="inspect" id="inspect">
-        <div class="ins-h"><b id="ins-title">No cluster selected</b><button id="ins-x" aria-label="Clear selection" hidden>&times;</button></div>
+        <div class="ins-h"><b id="ins-title">Click a node to inspect it</b><button id="ins-x" aria-label="Clear selection" hidden>&times;</button></div>
         <div class="ins-body" id="ins-body"><p class="ins-empty">Click any node to inspect the cluster behind it &mdash; genome, fitness, how many evaluations landed there, and which islands share it.</p></div>
       </div>
     </div>
@@ -327,11 +358,11 @@ const TEMPLATE = `
     <div class="legend-inline" id="legend"></div>
 
     <div class="strip">
-      <div class="stat"><span class="k">STN nodes</span><span class="v" id="k-nodes">&mdash;</span></div>
-      <div class="stat"><span class="k">Edges drawn</span><span class="v" id="k-edges">&mdash;</span></div>
+      <div class="stat"><span class="k">Nodes</span><span class="v" id="k-nodes">&mdash;</span></div>
+      <div class="stat"><span class="k">Search paths shown</span><span class="v" id="k-edges">&mdash;</span></div>
       <div class="stat"><span class="k">Of total</span><span class="v" id="k-pct">&mdash;</span></div>
-      <div class="stat"><span class="k">Overlap</span><span class="v" id="k-share">&mdash;</span></div>
-      <div class="stat"><span class="k">Migrations</span><span class="v" id="k-mig">&mdash;</span></div>
+      <div class="stat"><span class="k">Islands per node</span><span class="v" id="k-share">&mdash;</span></div>
+      <div class="stat"><span class="k">Migrants arrived</span><span class="v" id="k-mig">&mdash;</span></div>
       <div class="stat"><span class="k">Frame</span><span class="v" id="k-fps">&mdash;</span></div>
     </div>
   </div>
@@ -715,7 +746,7 @@ export function mountStnViewer(root, cfg) {
 
   /* ── state + camera ──────────────────────────────────────────── */
   const state = {
-    ds: 0, res: 2, wt: 1, zMode: 0, op: 120, dom: 140, exI: 0, exR: 0,
+    ds: 0, res: 2, wt: 2, ns: 100, zMode: 0, op: 180, dom: 140, exI: 0, exR: 0,
     colourBy: "island", grpOn: [], routesOn: [],
     contest: false, edges: true, selMark: true, bestIsl: true, bestRun: true,
     group: false, exIBefore: 0, flat: false, hs: 100, hsBefore: 100
@@ -765,8 +796,20 @@ export function mountStnViewer(root, cfg) {
     canvas.setPointerCapture(ev.pointerId);
     lastInteract = performance.now();
   });
+  let hoverAt = 0;
+  function showHover(ev) {
+    const now = performance.now(), tip = $("hover-tip");
+    if (now - hoverAt < 60 || !G) return;
+    hoverAt = now;
+    const r = canvas.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top, i = pickAt(x, y);
+    tip.hidden = i < 0;
+    if (i < 0) return;
+    tip.textContent = "Island " + islLabel(gIsl[G.pGrp[i]]) + " · fitness " + ((DS.fitSign || 1) * G.pf[i]).toFixed(4) + " · " + G.pVis[i] + (G.pVis[i] === 1 ? " evaluation" : " evaluations");
+    tip.style.transform = "translate(" + Math.min(x + 14, r.width - 250) + "px," + (y + 14) + "px)";
+  }
+  canvas.addEventListener("pointerleave", () => { $("hover-tip").hidden = true; });
   canvas.addEventListener("pointermove", ev => {
-    if (!dragging) return;
+    if (!dragging) return showHover(ev);
     const dx = ev.clientX - lx, dy = ev.clientY - ly;
     travel += Math.abs(dx) + Math.abs(dy);
     if (dragging === 1) {
@@ -970,7 +1013,7 @@ export function mountStnViewer(root, cfg) {
         syncSelectors();
       }));
     }
-    $("grp-colour").hidden = DS.runs < 2;
+    $("c-run").hidden = DS.runs < 2;
     $("grp-exr").hidden = DS.runs < 2;
 
     // islands
@@ -1023,6 +1066,7 @@ export function mountStnViewer(root, cfg) {
   }
 
   function syncSelectors() {
+    $("mig-all").setAttribute("aria-pressed", String(state.routesOn.some(Boolean)));
     Array.prototype.forEach.call($("runs").children,
       (b, r) => b.setAttribute("aria-pressed", String(runAnyOn(r))));
     Array.prototype.forEach.call($("islands").children,
@@ -1035,7 +1079,9 @@ export function mountStnViewer(root, cfg) {
   function updateLegend() {
     const L = $("legend"); L.innerHTML = "";
     const add = html => { const s = document.createElement("span"); s.innerHTML = html; L.appendChild(s); };
-    if (state.colourBy === "run" && DS.runs > 1) {
+    if (state.colourBy === "fitness") {
+      add('<i class="fit"></i>Best to worst fitness');
+    } else if (state.colourBy === "run" && DS.runs > 1) {
       for (let r = 0; r < DS.runs; r++) add('<i style="border-color:' + hex(PAL5[r % 5]) + '"></i>Run ' + r);
     } else if (DS.isl <= 6) {
       for (let i = 0; i < DS.isl; i++) add('<i style="border-color:' + hex(groupColour(i)) + '"></i>Island ' + islLabel(i));
@@ -1097,7 +1143,7 @@ export function mountStnViewer(root, cfg) {
     const box = $("ins-body"), title = $("ins-title"), x = $("ins-x");
     if (i < 0 || !G || i >= G.nodeCount) {
       selected = -1;
-      title.textContent = "No cluster selected";
+      title.textContent = "Click a node to inspect it";
       x.hidden = true;
       box.innerHTML = '<p class="ins-empty">Click any node to inspect the cluster behind it ' +
         '&mdash; genome, fitness, how many evaluations landed there, and who shares it.</p>';
@@ -1155,14 +1201,17 @@ export function mountStnViewer(root, cfg) {
     syncHeight();
   }));
   $("z-flat").addEventListener("click", () => { state.flat = !state.flat; syncHeight(); });
-  segment(["c-isl", "c-run"], () => state.colourBy === "island" ? 0 : 1, i => {
-    state.colourBy = i === 0 ? "island" : "run";
+  segment(["c-isl", "c-run", "c-fit"], () => ["island", "run", "fitness"].indexOf(state.colourBy), i => {
+    state.colourBy = ["island", "run", "fitness"][i];
     buildSelectors(); syncSelectors();
   });
   $("s-res").addEventListener("input", e => { applyRes(+e.target.value); });
   $("s-wt").addEventListener("input", e => {
-    state.wt = +e.target.value; $("v-wt").textContent = "w " + GE + " " + state.wt;
+    state.wt = +e.target.value; $("v-wt").textContent = GE + " " + state.wt + " visits";
     buildIndex(); updateStats();
+  });
+  $("s-ns").addEventListener("input", e => {
+    state.ns = +e.target.value; $("v-ns").textContent = (state.ns / 100).toFixed(2);
   });
   $("s-op").addEventListener("input", e => {
     state.op = +e.target.value; $("v-op").textContent = (state.op / 100).toFixed(2);
@@ -1201,11 +1250,11 @@ export function mountStnViewer(root, cfg) {
       state.exI = 100;
       state.hsBefore = state.hs;
       state.hs = 30;
-      camGoal = { el: 0.75, dist: 3.4 };
+      camGoal = { el: 0.75, dist: 4.6 };
     } else {
       state.exI = state.exIBefore;
       state.hs = state.hsBefore;
-      camGoal = { el: 0.30, dist: 3.15 };
+      camGoal = { el: 0.30, dist: DS.runs > 1 ? 4.3 : 3.15 };
     }
     $("s-exi").value = state.exI; $("v-exi").textContent = (state.exI / 100).toFixed(2);
     $("s-hs").value = state.hs; $("v-hs").textContent = (state.hs / 100).toFixed(2);
@@ -1217,7 +1266,7 @@ export function mountStnViewer(root, cfg) {
     syncSelectors();
   });
   $("reset").addEventListener("click", () => {
-    cam.az = 0.62; cam.el = 0.30; cam.dist = 3.15; cam.tx = cam.ty = cam.tz = 0;
+    cam.az = DS.runs > 1 ? 1.14 : 0.62; cam.el = 0.30; cam.dist = DS.runs > 1 ? 4.3 : 3.15; cam.tx = cam.ty = cam.tz = 0;
     zoomTarget = 0;
   });
 
@@ -1232,7 +1281,7 @@ export function mountStnViewer(root, cfg) {
       aggregate(state.res);
       const mx = Math.max(4, Math.min(24, Math.round(G.maxW * 0.25)));
       $("s-wt").max = mx;
-      if (state.wt > mx) { state.wt = mx; $("s-wt").value = mx; $("v-wt").textContent = "w " + GE + " " + mx; }
+      if (state.wt > mx) { state.wt = mx; $("s-wt").value = mx; $("v-wt").textContent = GE + " " + mx + " visits"; }
       // routes depend on topology, not granularity, so a rebuild keeps them
       if (state.routesOn.length !== G.routes.length) state.routesOn = G.routes.map(() => true);
       buildGeometry(); buildIndex(); buildSelectors(); syncSelectors();
@@ -1274,18 +1323,19 @@ export function mountStnViewer(root, cfg) {
       state.colourBy = multi ? "run" : "island";
       state.exR = multi ? 100 : 0;
       state.exI = 0;
-      cam.az = 0.62; cam.el = 0.30; cam.tx = cam.ty = cam.tz = 0;
+      cam.az = multi ? 1.14 : 0.62; cam.el = 0.30; cam.tx = cam.ty = cam.tz = 0;
       cam.dist = multi ? 4.3 : 3.15;
-      $("s-exr").value = state.exR; $("v-exr").textContent = (state.exR / 100).toFixed(2);
+      $("s-exr").defaultValue = state.exR; $("s-exr").value = state.exR; $("v-exr").textContent = (state.exR / 100).toFixed(2);
       $("s-exi").value = 0; $("v-exi").textContent = "0.00";
       $("c-isl").setAttribute("aria-pressed", String(!multi));
       $("c-run").setAttribute("aria-pressed", String(multi));
+      $("c-fit").setAttribute("aria-pressed", "false");
       $("cap").innerHTML = CAP;
       computeOffsets();
       aggregate(state.res);
       state.routesOn = G.routes.map(() => true);
       $("s-wt").max = Math.max(4, Math.min(24, Math.round(G.maxW * 0.25)));
-      state.wt = 1; $("s-wt").value = 1; $("v-wt").textContent = "w " + GE + " 1";
+      state.wt = 2; $("s-wt").value = 2; $("v-wt").textContent = GE + " 2 visits";
       buildGeometry(); buildIndex(); buildSelectors(); syncSelectors(); buildMarks();
       $("grp-agg").hidden = !!DS.cluster;
       syncHeight();
@@ -1304,7 +1354,11 @@ export function mountStnViewer(root, cfg) {
   const MIGC = [0.0, 0.898, 1.0];   // #00e5ff, reserved for migration
   let fpsN = 0, fpsLast = performance.now();
 
-  let running = false, raf = 0;
+  const bgHex = getComputedStyle(root).getPropertyValue('--viz-bg').trim() || '#000000';
+  const BG = [1, 3, 5].map(i => parseInt(bgHex.slice(i, i + 2), 16) / 255);
+
+  let running = false, raf = 0, wantImage = false;
+  $("save-img").addEventListener("click", () => { wantImage = true; });
   function startLoop() { if (!running) { running = true; raf = requestAnimationFrame(frame); } }
 
   function frame(now) {
@@ -1315,7 +1369,7 @@ export function mountStnViewer(root, cfg) {
     const useHDR = ensureFBO(W, H);
     gl.bindFramebuffer(gl.FRAMEBUFFER, useHDR ? fbo : null);
     gl.viewport(0, 0, W, H);
-    if (useHDR) gl.clearColor(0, 0, 0, 1); else gl.clearColor(0.024, 0.039, 0.059, 1);
+    if (useHDR) gl.clearColor(0, 0, 0, 1); else gl.clearColor(BG[0], BG[1], BG[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.disable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
@@ -1335,7 +1389,7 @@ export function mountStnViewer(root, cfg) {
     if (flyNode >= 0 && flyNode < G.nodeCount && nodeData) {
       const w = worldOf(flyNode), k = 0.14;
       cam.tx += (w[0] - cam.tx) * k; cam.ty += (w[1] - cam.ty) * k; cam.tz += (w[2] - cam.tz) * k;
-      cam.dist += (0.022 - cam.dist) * k;
+      cam.dist += (0.9 - cam.dist) * k;
       if (++flyFrames > 130) flyNode = -1;
     }
 
@@ -1377,6 +1431,7 @@ export function mountStnViewer(root, cfg) {
       gl.uniform1f(P.u.uContest, contest);
       gl.uniform1f(P.u.uFlat, flatShown);
       gl.uniform1f(P.u.uHS, hsShown);
+      gl.uniform1f(P.u.uByFit, state.colourBy === "fitness" ? 1 : 0);
       gl.uniform1f(P.u.uPScale, pscale);
     }
 
@@ -1388,7 +1443,7 @@ export function mountStnViewer(root, cfg) {
     }
 
     gl.blendFunc(useHDR ? gl.ONE : gl.SRC_ALPHA, gl.ONE);
-    setGraph(pPoint, (state.edges ? 0.14 : 0.42) * nodeGain, 0.85 * dpr(), contestShown);
+    setGraph(pPoint, (state.edges ? 0.14 : 0.42) * nodeGain, 1.35 * dpr() * state.ns / 100, contestShown);
     gl.bindVertexArray(vaoNodes);
     gl.drawArrays(gl.POINTS, 0, G.nodeCount);
 
@@ -1426,7 +1481,7 @@ export function mountStnViewer(root, cfg) {
       gl.uniform1i(pTone.u.uT0, 0);
       gl.uniform1f(pTone.u.uExp, state.op / 100);
       gl.uniform1f(pTone.u.uSat, state.dom / 100);
-      gl.uniform3f(pTone.u.uBg, 0.024, 0.039, 0.059);
+      gl.uniform3f(pTone.u.uBg, BG[0], BG[1], BG[2]);
       gl.bindVertexArray(vaoEmpty);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       gl.bindVertexArray(null);
@@ -1479,6 +1534,11 @@ export function mountStnViewer(root, cfg) {
     if (now - fpsLast > 500) {
       $("k-fps").innerHTML = (fpsN / ((now - fpsLast) / 1000)).toFixed(0) + '<small> fps</small>';
       fpsN = 0; fpsLast = now;
+    }
+    if (wantImage) {                                    // the drawing buffer is only readable before the frame ends
+      wantImage = false;
+      const a = document.createElement("a");
+      a.download = "archipelago-view.png"; a.href = canvas.toDataURL("image/png"); a.click();
     }
     raf = requestAnimationFrame(frame);
   }
